@@ -65,6 +65,7 @@ Vercel → Project → **Settings → Environment Variables** (Production):
 | `DATABASE_URL` | Pooled connection string แต่เปลี่ยน **user/password** เป็น `fahtalay_app` / `DATABASE_APP_PASSWORD` จากข้อ 2 · ต่อท้าย `?sslmode=require` |
 | `APP_SECRET` | ข้อความสุ่มยาวอย่างน้อย 32 ตัว (สร้างได้ด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) |
 | `DATABASE_POOL_MAX` | `3` (serverless เปิดหลาย instance พร้อมกัน) |
+| `DEFAULT_TENANT_SLUG` | `fahtalay` (ไม่บังคับ) — โรงแรมที่จะแสดงเมื่อเปิดจากโดเมนที่ไม่อยู่ใน `tenant_domains` เช่น URL ของแต่ละ deployment ที่มีเลขสุ่ม · ใช้เฉพาะตอนติดตั้งโรงแรมเดียว ถ้าเป็นแพลตฟอร์มหลายโรงแรมให้เว้นว่าง |
 
 > ⚠ ห้ามใส่ `DATABASE_ADMIN_URL` (สิทธิ์เจ้าของตาราง) ใน Vercel แอปต้องใช้ role `fahtalay_app` เท่านั้น เพื่อให้ RLS แยกข้อมูลโรงแรมทำงาน
 
@@ -79,7 +80,7 @@ Vercel → Project → **Settings → Environment Variables** (Production):
 | ข้อความใน Logs | สาเหตุ | แก้ |
 |---|---|---|
 | `DATABASE_URL is not set` | ยังไม่ได้ตั้งค่าข้อ 3 หรือยังไม่ได้ Redeploy | ข้อ 3 |
-| `ไม่พบโรงแรมสำหรับโดเมนนี้` | โดเมนที่เปิดไม่อยู่ใน `tenant_domains` (เช่น URL preview ที่มีเลขสุ่ม) | `npm run db:domain -- <โดเมน>` |
+| `ไม่พบโรงแรมสำหรับโดเมนนี้` | โดเมนที่เปิดไม่อยู่ใน `tenant_domains` (เช่น URL preview ที่มีเลขสุ่ม) | `npm run db:domain -- <โดเมน>` หรือรัน `scripts/add-vercel-domains.sql` ใน Supabase SQL Editor · URL ที่เปลี่ยนทุก deploy: ตั้ง `DEFAULT_TENANT_SLUG` |
 | `APP_SECRET is missing` | ยังไม่ได้ตั้ง `APP_SECRET` | ข้อ 3 |
 | `password authentication failed for user "fahtalay_app"` | รหัสผ่านใน `DATABASE_URL` ไม่ตรงกับ `DATABASE_APP_PASSWORD` ตอน migrate | รัน `npm run db:migrate` ใหม่ด้วยรหัสเดิม หรือแก้ `DATABASE_URL` |
 | `relation "tenants" does not exist` | ยังไม่ได้ migrate | ข้อ 2 |

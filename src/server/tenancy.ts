@@ -10,18 +10,31 @@ export function normalizeHost(host: string | null | undefined) {
   return (host ?? "").trim().toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
 }
 
+/**
+ * Slug of the hotel shown on hosts that are not in tenant_domains (e.g. Vercel's
+ * per-deployment URLs, which change on every deploy). Unset = unknown hosts fail.
+ */
+export function defaultTenantSlug(): string | null {
+  return process.env.DEFAULT_TENANT_SLUG?.trim().toLowerCase() || null;
+}
+
 /** Resolve the tenant from the request Host header (tenant_domains). Never from client-supplied data. */
 export async function resolveTenantByHost(rawHost: string | null | undefined): Promise<Tenant | null> {
   const host = normalizeHost(rawHost);
   if (!host) return null;
   const hit = cache.get(host);
   if (hit && Date.now() - hit.at < TTL) return hit.value;
+  const fallbackSlug = defaultTenantSlug();
   const value = await withoutTenant(async (tx) => {
-    const t = await one<{ id: string; slug: string; name: string; status: "active" | "suspended" }>(
+    type Row = { id: string; slug: string; name: string; status: "active" | "suspended" };
+    let t = await one<Row>(
       tx,
       `SELECT t.id, t.slug, t.name, t.status FROM tenant_domains d JOIN tenants t ON t.id = d.tenant_id WHERE d.host = $1`,
       [host],
     );
+    if (!t && fallbackSlug) {
+      t = await one<Row>(tx, `SELECT id, slug, name, status FROM tenants WHERE slug = $1`, [fallbackSlug]);
+    }
     if (!t) return null;
     // properties are RLS-protected: read the default property inside the tenant context
     await tx.query("SELECT set_config('app.tenant_id', $1, true)", [t.id]);
