@@ -15,6 +15,27 @@
 | Pooled | host มีคำว่า `-pooler` | `DATABASE_URL` ของแอป (หลังข้อ 2) |
 | Direct / Unpooled | ไม่มี `-pooler` | `DATABASE_ADMIN_URL` สำหรับ migration (ใช้ในเครื่องเท่านั้น ไม่ต้องใส่ใน Vercel) |
 
+### ทางเลือก: ใช้ Supabase
+
+1. supabase.com → **New project** → Region **Southeast Asia (Singapore)** → ตั้ง Database Password (จดไว้)
+2. กดปุ่ม **Connect** ด้านบนของโปรเจกต์ จะเห็น connection string 3 แบบ:
+
+| แบบ | หน้าตา | ใช้กับ |
+|---|---|---|
+| Direct connection | `postgresql://postgres:[PW]@db.<ref>.supabase.co:5432/postgres` | ไม่แนะนำ (แพ็กเกจฟรีเป็น IPv6 อย่างเดียว เน็ตบ้านส่วนใหญ่ต่อไม่ได้) |
+| **Session pooler** | `postgresql://postgres.<ref>:[PW]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres` | `DATABASE_ADMIN_URL` ในข้อ 2 (migrate/seed จากเครื่อง) |
+| **Transaction pooler** | `…pooler.supabase.com:6543/postgres` | `DATABASE_URL` ของแอปบน Vercel (ข้อ 3) |
+
+3. ใน `DATABASE_URL` (ข้อ 3) ให้เปลี่ยนผู้ใช้เป็น **`fahtalay_app.<ref>`** (ต้องมี `.<ref>` ต่อท้ายเมื่อผ่าน pooler) และรหัสผ่านเป็น `DATABASE_APP_PASSWORD` เช่น
+   `postgresql://fahtalay_app.abcdxyz:<APP_PW>@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require`
+4. **ปิด Data API** (แอปนี้ไม่ใช้): Project Settings → Data API → ปิด หรือเอา `public` ออกจาก Exposed schemas
+   — migration `0003_supabase_hardening` ถอนสิทธิ์ของ `anon`/`authenticated` จากทุกตารางให้อยู่แล้ว (มี test ยืนยัน) การปิด Data API เป็นชั้นป้องกันเพิ่ม
+5. ห้ามนำ `service_role` key หรือ `anon` key มาใส่ในโปรเจกต์นี้ — ไม่จำเป็นต้องใช้
+
+> ระบบนี้ทำงานกับ Transaction pooler ได้ เพราะทุก request ทำงานใน transaction เดียว (ตั้ง `app.tenant_id` ด้วย `SET LOCAL`) และไม่ใช้ named prepared statements
+>
+> ถ้าเชื่อมต่อแล้วขึ้น `self-signed certificate in certificate chain` ให้ต่อท้าย connection string เป็น `?sslmode=require&uselibpqcompat=true` (เข้ารหัสการเชื่อมต่อแบบเดียวกับ psql) หรือดาวน์โหลด CA certificate จาก Supabase (Database Settings → SSL) เพื่อตรวจสอบใบรับรองเต็มรูปแบบ
+
 ## 2. สร้างตารางและข้อมูลตั้งต้น (รันจากเครื่องตัวเอง ใน PowerShell)
 
 ```powershell

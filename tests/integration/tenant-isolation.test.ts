@@ -84,6 +84,27 @@ describe("tenant isolation", () => {
     ).resolves.toMatchObject({ rowCount: 0 });
   });
 
+  it("Supabase Data API roles (anon / authenticated) cannot read or write any table", async () => {
+    const c = await admin().connect();
+    try {
+      const tables = (await c.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).rows.map((r) => r.tablename as string);
+      expect(tables).toContain("users");
+      for (const role of ["anon", "authenticated"]) {
+        await c.query("BEGIN");
+        await c.query(`SET LOCAL ROLE ${role}`);
+        for (const t of tables) {
+          await c.query("SAVEPOINT s");
+          await expect(c.query(`SELECT 1 FROM ${t} LIMIT 1`), `${role} reading ${t}`).rejects.toThrow(/permission denied/);
+          await c.query("ROLLBACK TO SAVEPOINT s");
+        }
+        await c.query("ROLLBACK");
+      }
+    } finally {
+      await c.query("ROLLBACK").catch(() => {});
+      c.release(true); // discard: never return a connection with a changed role to the pool
+    }
+  });
+
   it("composite foreign keys block cross-tenant references even for the owner role", async () => {
     await expect(
       admin().query("INSERT INTO rooms (tenant_id, room_type_id, room_number) VALUES ($1, $2, 'X1')", [a.tenantId, b.roomTypeId]),

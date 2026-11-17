@@ -46,6 +46,17 @@ export default async function setup(project: TestProject) {
   await createDatabaseIfMissing(urlFor(base, "postgres"), "fahtalay_test");
   const adminUrl = urlFor(base, "fahtalay_test");
 
+  // simulate Supabase: Data API roles that receive default grants on every new table in `public`
+  {
+    const pg = (await import("pg")).default;
+    const c = new pg.Client({ connectionString: adminUrl });
+    await c.connect();
+    await c.query("CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;");
+    await c.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated");
+    await c.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated");
+    await c.end();
+  }
+
   // prove every down migration works (newest first), then migrate up for real
   await migrateUp(adminUrl);
   while (await migrateDown(adminUrl));
