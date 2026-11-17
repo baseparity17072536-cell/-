@@ -12,7 +12,10 @@ const globalForPool = globalThis as unknown as { __appPool?: pg.Pool };
 function pool() {
   if (!globalForPool.__appPool) {
     const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set. Run `npm run db:start` and `npm run db:migrate` (see ENVIRONMENT_SETUP.md).");
+    if (!url)
+      throw new Error(
+        "DATABASE_URL is not set. Production (Vercel): see docs/DEPLOYMENT_GUIDE.md. Local: run `npm run db:start` and `npm run db:migrate` (docs/ENVIRONMENT_SETUP.md).",
+      );
     globalForPool.__appPool = new pg.Pool({ connectionString: url, max: Number(process.env.DATABASE_POOL_MAX ?? 10) });
   }
   return globalForPool.__appPool;

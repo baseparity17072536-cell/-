@@ -20,6 +20,9 @@ const DB_NAME = "fahtalay_dev";
 const APP_USER = "fahtalay_app";
 
 function loadEnv() {
+  // Production / staging: pass DATABASE_ADMIN_URL in the shell and no local file is read,
+  // so a command can never silently fall back to the development database.
+  if (process.env.DATABASE_ADMIN_URL) return;
   for (const f of [".env.local", ".env.development.local"]) {
     const p = path.join(ROOT, f);
     if (existsSync(p)) process.loadEnvFile(p);
@@ -96,10 +99,33 @@ async function rollback() {
 async function seed() {
   loadEnv();
   const { runSeed } = await import("../db/seed");
-  await runSeed(required("DATABASE_ADMIN_URL"));
+  // SEED_HOSTS: comma-separated domains that should open this hotel, e.g. "mu-beryl-23.vercel.app,localhost"
+  const hosts = process.env.SEED_HOSTS?.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  await runSeed(required("DATABASE_ADMIN_URL"), { hosts });
 }
 
-const commands: Record<string, () => Promise<void>> = { start, migrate, rollback, seed };
+/** Attach another domain to a hotel: tsx scripts/db.ts domain <host> [tenant-slug] */
+async function domain() {
+  loadEnv();
+  const host = (process.argv[3] ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const slug = process.argv[4] ?? "fahtalay";
+  if (!/^[a-z0-9.-]+(:\d+)?$/.test(host)) throw new Error("usage: npm run db:domain -- <host> [tenant-slug]");
+  const pg = (await import("pg")).default;
+  const c = new pg.Client({ connectionString: required("DATABASE_ADMIN_URL") });
+  await c.connect();
+  try {
+    const r = await c.query(
+      `INSERT INTO tenant_domains (host, tenant_id) SELECT $1, id FROM tenants WHERE slug = $2
+       ON CONFLICT (host) DO UPDATE SET tenant_id = EXCLUDED.tenant_id RETURNING host`,
+      [host.replace(/:\d+$/, ""), slug],
+    );
+    console.log(r.rowCount ? `domain ${host} -> ${slug}` : `tenant '${slug}' not found`);
+  } finally {
+    await c.end();
+  }
+}
+
+const commands: Record<string, () => Promise<void>> = { start, migrate, rollback, seed, domain };
 const cmd = process.argv[2] ?? "";
 if (!commands[cmd]) {
   console.error(`usage: tsx scripts/db.ts <${Object.keys(commands).join("|")}>`);
