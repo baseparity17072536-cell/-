@@ -1,0 +1,9 @@
+# Never upload local secrets, local databases or test artifacts when deploying with the Vercel CLI
+.env*
+.pgdata
+.pgtest
+data
+storage
+test-results
+playwright-report
+*setup*.sql
