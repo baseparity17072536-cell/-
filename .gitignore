@@ -42,3 +42,7 @@ next-env.d.ts
 
 # booking data
 /data
+
+# local postgres data (scripts/db.ts)
+/.pgdata
+/.pgtest

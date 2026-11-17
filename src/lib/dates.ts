@@ -21,7 +21,12 @@ export function addDays(date: string, days: number) {
 
 /** วันนี้ตามเวลาประเทศไทย */
 export function todayInBangkok(now = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(now);
+  return todayIn("Asia/Bangkok", now);
+}
+
+/** วันนี้ (YYYY-MM-DD) ตาม timezone ของที่พัก */
+export function todayIn(timeZone: string, now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(now);
 }
 
 export function formatThaiDate(date: string, opts: Intl.DateTimeFormatOptions = {}) {
