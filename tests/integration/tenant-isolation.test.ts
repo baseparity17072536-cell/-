@@ -20,8 +20,8 @@ beforeAll(async () => {
   const p = (await db.query("INSERT INTO properties (tenant_id, slug, name_th) VALUES ($1, 'main', 'Second') RETURNING id", [t])).rows[0].id;
   await db.query("INSERT INTO rate_plans (tenant_id, property_id, code, name_th, is_default) VALUES ($1,$2,'ROOM_ONLY','Room',true)", [t, p]);
   const rt = (await db.query(
-    `INSERT INTO room_types (tenant_id, property_id, slug, name_th, base_adults, max_adults, max_occupancy, base_price_satang)
-     VALUES ($1,$2,'standard','Standard',2,2,2,100000) RETURNING id`, [t, p])).rows[0].id;
+    `INSERT INTO room_types (tenant_id, property_id, slug, code, name_th, base_adults, max_adults, max_occupancy, base_price_satang)
+     VALUES ($1,$2,'standard','STD','Standard',2,2,2,100000) RETURNING id`, [t, p])).rows[0].id;
   await db.query("INSERT INTO rooms (tenant_id, room_type_id, room_number) VALUES ($1,$2,'1')", [t, rt]);
   b = { tenantId: t, propertyId: p, roomTypeId: rt };
 

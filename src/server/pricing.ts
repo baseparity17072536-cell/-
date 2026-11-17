@@ -23,7 +23,51 @@ export type DailyRate = { stay_date: string; price_satang: number | null; is_clo
 
 export type Occupancy = { adults: number; children: number; extraBeds: number };
 
-export type NightPrice = { date: string; room: number; extras: number };
+export type PriceRule = {
+  id: string;
+  name: string;
+  date_from: string | null;
+  date_to: string | null;
+  weekdays: number[];
+  price_satang: number;
+  priority: number;
+  created_at: Date | string;
+};
+
+/** Where a night's room price came from — stored on every booked night (ADR-0004). */
+export type PriceSource = "base" | "daily" | `rule:${string}`;
+
+export type NightPrice = { date: string; room: number; extras: number; source: PriceSource; sourceLabel: string };
+
+function weekday(date: string) {
+  return new Date(`${date}T00:00:00Z`).getUTCDay();
+}
+
+/** Highest priority wins; ties go to the most recently created rule. Deterministic for any input. */
+export function matchRule(rules: PriceRule[], date: string): PriceRule | null {
+  let best: PriceRule | null = null;
+  for (const r of rules) {
+    if (r.date_from && date < r.date_from) continue;
+    if (r.date_to && date > r.date_to) continue;
+    if (r.weekdays.length && !r.weekdays.includes(weekday(date))) continue;
+    if (
+      !best ||
+      r.priority > best.priority ||
+      (r.priority === best.priority && new Date(r.created_at).getTime() > new Date(best.created_at).getTime()) ||
+      (r.priority === best.priority && new Date(r.created_at).getTime() === new Date(best.created_at).getTime() && r.id > best.id)
+    )
+      best = r;
+  }
+  return best;
+}
+
+/** Resolve the room price for one night before rate-plan adjustment. */
+export function resolveNightPrice(base: number, date: string, daily: DailyRate | undefined, rules: PriceRule[]) {
+  if (daily?.price_satang != null) return { price: daily.price_satang, source: "daily" as PriceSource, label: "ราคากำหนดรายวัน" };
+  const rule = matchRule(rules, date);
+  if (rule) return { price: rule.price_satang, source: `rule:${rule.id}` as PriceSource, label: rule.name };
+  return { price: base, source: "base" as PriceSource, label: "ราคาพื้นฐาน" };
+}
 
 export class PricingError extends Error {
   constructor(
@@ -66,6 +110,7 @@ export function priceRoom(
   checkIn: string,
   checkOut: string,
   o: Occupancy,
+  rules: PriceRule[] = [],
 ): NightPrice[] {
   validateOccupancy(rt, o);
   const byDate = new Map(daily.map((d) => [d.stay_date, d]));
@@ -82,8 +127,30 @@ export function priceRoom(
   return dates.map((date) => {
     const d = byDate.get(date);
     if (d?.is_closed) throw new PricingError("CLOSED", `ปิดรับจองคืนวันที่ ${date}`);
-    return { date, room: applyRatePlan(d?.price_satang ?? rt.base_price_satang, plan), extras };
+    const p = resolveNightPrice(rt.base_price_satang, date, d, rules);
+    return { date, room: applyRatePlan(p.price, plan), extras, source: p.source, sourceLabel: p.label };
   });
+}
+
+export type TaxConfig = { inclusive: boolean; vatBp: number; serviceChargeBp: number };
+export type TaxBreakdown = { net: number; serviceCharge: number; vat: number; total: number };
+
+/**
+ * Thai convention: service charge on the net price, VAT on (net + service charge).
+ * Inclusive prices are split back into components (total unchanged);
+ * exclusive prices get the charges added once. Tax is never applied twice.
+ */
+export function computeTax(amount: number, t: TaxConfig): TaxBreakdown {
+  const sc = t.serviceChargeBp / 10_000;
+  const vat = t.vatBp / 10_000;
+  if (t.inclusive) {
+    const net = Math.round(amount / ((1 + sc) * (1 + vat)));
+    const serviceCharge = Math.round(net * sc);
+    return { net, serviceCharge, vat: amount - net - serviceCharge, total: amount };
+  }
+  const serviceCharge = Math.round(amount * sc);
+  const v = Math.round((amount + serviceCharge) * vat);
+  return { net: amount, serviceCharge, vat: v, total: amount + serviceCharge + v };
 }
 
 export function sumNights(nights: NightPrice[]) {

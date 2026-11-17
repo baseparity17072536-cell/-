@@ -24,7 +24,8 @@ export default async function setup(project: TestProject) {
   const adminPw = randomBytes(12).toString("hex");
   const appPw = randomBytes(12).toString("hex");
   const server = new EmbeddedPostgres({
-    databaseDir: dir, port: PORT, user: "postgres", password: adminPw, persistent: false,
+    // persistent: we delete the directory ourselves with retries (Windows file locks)
+    databaseDir: dir, port: PORT, user: "postgres", password: adminPw, persistent: true,
     initdbFlags: ["--encoding=UTF8", "--locale=C"], onLog: () => {}, onError: () => {},
   });
   await server.initialise();
@@ -33,9 +34,9 @@ export default async function setup(project: TestProject) {
   await createDatabaseIfMissing(urlFor(base, "postgres"), "fahtalay_test");
   const adminUrl = urlFor(base, "fahtalay_test");
 
-  // prove the down migration works, then migrate up for real
+  // prove every down migration works (newest first), then migrate up for real
   await migrateUp(adminUrl);
-  await migrateDown(adminUrl);
+  while (await migrateDown(adminUrl));
   await migrateUp(adminUrl);
   await ensureAppLogin(adminUrl, "fahtalay_app", appPw);
   if (process.env.MUTATION_DROP_OVERBOOKING_GUARD) {

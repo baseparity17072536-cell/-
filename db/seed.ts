@@ -55,10 +55,11 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
     for (const [i, t] of ROOM_TYPES.entries()) {
       const id: string = (
         await c.query(
-          `INSERT INTO room_types (tenant_id, property_id, slug, name_th, name_en, description_th, bed_info, base_adults,
+          `INSERT INTO room_types (tenant_id, property_id, slug, code, name_th, name_en, description_th, bed_info, base_adults,
              max_adults, max_children, max_occupancy, max_extra_beds, base_price_satang, amenities, sort_order)
-           VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$7,$8,$7,0,$9,$10,$11) RETURNING id`,
-          [tenantId, propertyId, t.id, t.name, t.description, t.beds, t.capacity, Math.max(1, Math.floor(t.capacity / 2)), t.price * 100, t.amenities, i],
+           VALUES ($1,$2,$3,$12,$4,$4,$5,$6,$7,$7,$8,$7,0,$9,$10,$11) RETURNING id`,
+          [tenantId, propertyId, t.id, t.name, t.description, t.beds, t.capacity, Math.max(1, Math.floor(t.capacity / 2)), t.price * 100, t.amenities, i,
+           t.id.split("-").map((w) => w[0]).join("").toUpperCase().padEnd(2, "X")],
         )
       ).rows[0].id;
       typeIds.set(t.id, id);

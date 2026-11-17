@@ -6,7 +6,10 @@ import { canTransition, inventoryDelta, STATUS_LABEL, type BookingStatus } from 
 import { many, one, withTenant, type Tx } from "./db";
 import { DomainError, pgCode, pgConstraint } from "./errors";
 import { applyInventoryDelta, availabilityByNight } from "./inventory";
-import { priceRoom, PricingError, sumNights, type DailyRate, type RatePlanPricing, type RoomTypePricing } from "./pricing";
+import {
+  computeTax, priceRoom, PricingError, resolveNightPrice, sumNights,
+  type DailyRate, type PriceRule, type RatePlanPricing, type RoomTypePricing, type TaxConfig,
+} from "./pricing";
 import { decide, ForbiddenError, type Permission } from "./rbac";
 
 // ---------------------------------------------------------------- types --
@@ -40,7 +43,12 @@ type PropertyRow = {
   hold_minutes: number;
   max_nights: number;
   booking_window_days: number;
+  prices_include_tax: boolean;
+  vat_bp: number;
+  service_charge_bp: number;
 };
+
+const taxOf = (p: PropertyRow): TaxConfig => ({ inclusive: p.prices_include_tax, vatBp: p.vat_bp, serviceChargeBp: p.service_charge_bp });
 
 type RoomTypeRow = RoomTypePricing & { id: string; name_th: string; property_id: string; is_active: boolean };
 type RatePlanRow = RatePlanPricing & { id: string; name_th: string; property_id: string; is_default: boolean; is_active: boolean };
@@ -91,7 +99,7 @@ function validateStay(p: PropertyRow, checkIn: string, checkOut: string, actor: 
 async function loadProperty(tx: Tx, propertyId: string) {
   const p = await one<PropertyRow>(
     tx,
-    `SELECT id, name_th, timezone, hold_minutes, max_nights, booking_window_days
+    `SELECT id, name_th, timezone, hold_minutes, max_nights, booking_window_days, prices_include_tax, vat_bp, service_charge_bp
      FROM properties WHERE id = $1 AND is_active`,
     [propertyId],
   );
@@ -111,6 +119,20 @@ async function loadDailyRates(tx: Tx, roomTypeIds: string[], checkIn: string, ch
     [roomTypeIds, checkIn, checkOut],
   );
   const map = new Map<string, DailyRate[]>();
+  for (const r of rows) map.set(r.room_type_id, [...(map.get(r.room_type_id) ?? []), r]);
+  return map;
+}
+
+async function loadPriceRules(tx: Tx, roomTypeIds: string[], checkIn: string, checkOut: string) {
+  const rows = await many<PriceRule & { room_type_id: string }>(
+    tx,
+    `SELECT id, room_type_id, name, date_from::text, date_to::text, weekdays::int[] AS weekdays, price_satang, priority, created_at
+     FROM price_rules
+     WHERE room_type_id = ANY($1::uuid[]) AND is_active
+       AND (date_from IS NULL OR date_from < $3) AND (date_to IS NULL OR date_to >= $2)`,
+    [roomTypeIds, checkIn, checkOut],
+  );
+  const map = new Map<string, PriceRule[]>();
   for (const r of rows) map.set(r.room_type_id, [...(map.get(r.room_type_id) ?? []), r]);
   return map;
 }
@@ -207,7 +229,15 @@ export type AvailabilityResult = {
   name: string;
   available: number;
   closed: boolean;
-  plans: { ratePlanId: string; name: string; total: number; nightly: { date: string; amount: number }[]; error?: string }[];
+  plans: {
+    ratePlanId: string;
+    name: string;
+    /** amount the guest pays (tax added when the property prices exclude tax) */
+    total: number;
+    tax: { net: number; serviceCharge: number; vat: number; inclusive: boolean };
+    nightly: { date: string; amount: number; source: string }[];
+    error?: string;
+  }[];
   error?: string;
 };
 
@@ -234,7 +264,9 @@ export async function searchAvailability(
     const ids = types.map((t) => t.id);
     const free = await availabilityByNight(tx, tenantId, ids, q.checkIn, q.checkOut);
     const daily = await loadDailyRates(tx, ids, q.checkIn, q.checkOut);
+    const rules = await loadPriceRules(tx, ids, q.checkIn, q.checkOut);
     const party = splitPartySafe(q.rooms, q.adults, q.children);
+    const tax = taxOf(p);
 
     return types.map((t) => {
       const d = daily.get(t.id) ?? [];
@@ -244,12 +276,18 @@ export async function searchAvailability(
       for (const plan of plans) {
         try {
           if (!party) throw new PricingError("OCCUPANCY", result.error!);
-          const perRoom = party.map((o) => priceRoom(t, plan, d, q.checkIn, q.checkOut, o));
-          const nightly = perRoom[0].map((n, i) => ({ date: n.date, amount: perRoom.reduce((s, r) => s + r[i].room + r[i].extras, 0) }));
-          result.plans.push({ ratePlanId: plan.id, name: plan.name_th, total: perRoom.reduce((s, r) => s + sumNights(r), 0), nightly });
+          const perRoom = party.map((o) => priceRoom(t, plan, d, q.checkIn, q.checkOut, o, rules.get(t.id) ?? []));
+          const nightly = perRoom[0].map((n, i) => ({ date: n.date, amount: perRoom.reduce((s, r) => s + r[i].room + r[i].extras, 0), source: n.sourceLabel }));
+          const b = computeTax(perRoom.reduce((s, r) => s + sumNights(r), 0), tax);
+          result.plans.push({
+            ratePlanId: plan.id, name: plan.name_th, total: b.total,
+            tax: { net: b.net, serviceCharge: b.serviceCharge, vat: b.vat, inclusive: tax.inclusive }, nightly,
+          });
         } catch (e) {
           if (!(e instanceof PricingError)) throw e;
-          result.plans.push({ ratePlanId: plan.id, name: plan.name_th, total: 0, nightly: [], error: e.message });
+          result.plans.push({
+            ratePlanId: plan.id, name: plan.name_th, total: 0, tax: { net: 0, serviceCharge: 0, vat: 0, inclusive: tax.inclusive }, nightly: [], error: e.message,
+          });
         }
       }
       return result;
@@ -304,6 +342,7 @@ export async function createBooking(tenantId: string, input: CreateBookingInput,
       const plans = await many<RatePlanRow>(tx, `SELECT ${RATE_PLAN_COLS} FROM rate_plans WHERE property_id = $1 AND is_active`, [p.id]);
       const defaultPlan = plans.find((x) => x.is_default) ?? plans[0];
       const daily = await loadDailyRates(tx, typeIds, input.checkIn, input.checkOut);
+      const rules = await loadPriceRules(tx, typeIds, input.checkIn, input.checkOut);
 
       const priced = input.rooms.map((r) => {
         const t = types.get(r.roomTypeId);
@@ -311,13 +350,14 @@ export async function createBooking(tenantId: string, input: CreateBookingInput,
         const plan = r.ratePlanId ? plans.find((x) => x.id === r.ratePlanId) : defaultPlan;
         if (!plan) throw new DomainError("NOT_FOUND", "ไม่พบแพ็กเกจราคาที่เลือก");
         try {
-          const nights = priceRoom(t, plan, daily.get(t.id) ?? [], input.checkIn, input.checkOut, r);
+          const nights = priceRoom(t, plan, daily.get(t.id) ?? [], input.checkIn, input.checkOut, r, rules.get(t.id) ?? []);
           return { input: r, type: t, plan, nights, amount: sumNights(nights) };
         } catch (e) {
           toDomain(e);
         }
       });
       const subtotal = priced.reduce((s, x) => s + x.amount, 0);
+      const tax = computeTax(subtotal, taxOf(p));
       const status: BookingStatus = input.confirmNow ? "confirmed" : "pending_payment";
 
       const guest = await one<{ id: string }>(
@@ -334,15 +374,16 @@ export async function createBooking(tenantId: string, input: CreateBookingInput,
             tx,
             `INSERT INTO bookings (tenant_id, property_id, code, guest_id, status, source, check_in, check_out,
                adults, children, subtotal_satang, discount_satang, total_satang, special_request, internal_note,
-               hold_expires_at, idempotency_key, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,$11,$12,$13,
-               CASE WHEN $5 = 'pending_payment' THEN now() + make_interval(mins => $14::int) END, $15, $16)
+               hold_expires_at, idempotency_key, created_by, tax_inclusive, service_charge_satang, vat_satang)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,$17,$12,$13,
+               CASE WHEN $5 = 'pending_payment' THEN now() + make_interval(mins => $14::int) END, $15, $16, $18, $19, $20)
              RETURNING id, code, property_id, status, check_in, check_out, version, total_satang, guest_id`,
             [
               tenantId, p.id, newCode(), guest!.id, status, input.source, input.checkIn, input.checkOut,
               input.rooms.reduce((s, r) => s + r.adults, 0), input.rooms.reduce((s, r) => s + r.children, 0),
               subtotal, input.guest.note?.trim() || null, input.internalNote?.trim() || null, p.hold_minutes,
               input.idempotencyKey ?? null, actor.type === "staff" ? actor.userId : null,
+              tax.total, p.prices_include_tax, tax.serviceCharge, tax.vat,
             ],
           );
           await tx.query("RELEASE SAVEPOINT code");
@@ -363,9 +404,9 @@ export async function createBooking(tenantId: string, input: CreateBookingInput,
           [tenantId, b.id, x.type.id, x.plan.id, x.type.name_th, x.plan.name_th, x.input.adults, x.input.children, x.input.extraBeds, x.amount],
         );
         await tx.query(
-          `INSERT INTO booking_nights (tenant_id, booking_room_id, stay_date, room_satang, extras_satang)
-           SELECT $1, $2, d, r, e FROM unnest($3::date[], $4::int[], $5::int[]) AS t(d, r, e)`,
-          [tenantId, br!.id, x.nights.map((n) => n.date), x.nights.map((n) => n.room), x.nights.map((n) => n.extras)],
+          `INSERT INTO booking_nights (tenant_id, booking_room_id, stay_date, room_satang, extras_satang, price_source)
+           SELECT $1, $2, d, r, e, s FROM unnest($3::date[], $4::int[], $5::int[], $6::text[]) AS t(d, r, e, s)`,
+          [tenantId, br!.id, x.nights.map((n) => n.date), x.nights.map((n) => n.room), x.nights.map((n) => n.extras), x.nights.map((n) => n.source)],
         );
       }
 
@@ -379,11 +420,11 @@ export async function createBooking(tenantId: string, input: CreateBookingInput,
       );
       if (actor.type === "staff") await audit(tx, tenantId, actor, "booking.create", "booking", b.code, { source: input.source, status });
       await enqueue(tx, tenantId, "line", "staff.booking_created", null, {
-        code: b.code, guest: name, checkIn: input.checkIn, checkOut: input.checkOut, total: subtotal, source: input.source,
+        code: b.code, guest: name, checkIn: input.checkIn, checkOut: input.checkOut, total: tax.total, source: input.source,
       });
       if (input.guest.email) await enqueue(tx, tenantId, "email", "guest.booking_received", input.guest.email, { code: b.code });
 
-      return { code: b.code, status, total: subtotal, duplicate: false };
+      return { code: b.code, status, total: tax.total, duplicate: false };
     });
   } catch (e) {
     // a concurrent request with the same idempotency key won the race: return its booking
@@ -597,13 +638,15 @@ export async function getCalendar(tenantId: string, propertyId: string, from: st
   const to = addDays(from, days);
   return withTenant(tenantId, async (tx) => {
     await expireStaleHolds(tx, tenantId);
-    const types = await many<{ id: string; name_th: string; base_price_satang: number; active_rooms: number }>(
+    const types = await many<{ id: string; name_th: string; code: string; base_price_satang: number; active_rooms: number; out_of_order: number }>(
       tx,
-      `SELECT t.id, t.name_th, t.base_price_satang,
-              (SELECT count(*)::int FROM rooms r WHERE r.room_type_id = t.id AND r.status = 'active') AS active_rooms
+      `SELECT t.id, t.name_th, t.code, t.base_price_satang,
+              (SELECT count(*)::int FROM rooms r WHERE r.room_type_id = t.id AND r.status = 'active') AS active_rooms,
+              (SELECT count(*)::int FROM rooms r WHERE r.room_type_id = t.id AND r.status = 'maintenance') AS out_of_order
        FROM room_types t WHERE t.property_id = $1 AND t.is_active ORDER BY t.sort_order, t.name_th`,
       [propertyId],
     );
+    const rules = await loadPriceRules(tx, types.map((t) => t.id), from, to);
     const cells = await many<{ room_type_id: string; stay_date: string; total: number | null; held: number | null; sold: number | null; price_satang: number | null; is_closed: boolean | null; min_nights: number | null }>(
       tx,
       `SELECT t.id AS room_type_id, d::date::text AS stay_date, i.total, i.held, i.sold, dr.price_satang, dr.is_closed, dr.min_nights
@@ -620,17 +663,25 @@ export async function getCalendar(tenantId: string, propertyId: string, from: st
         .filter((c) => c.room_type_id === t.id)
         .sort((a, b) => a.stay_date.localeCompare(b.stay_date))
         .map((c) => {
+          // `total` = sellable rooms (active units). Out-of-order units are already excluded from it,
+          // so they are reported separately and never subtracted twice (Addendum Part 3).
           const total = c.total ?? t.active_rooms;
           const held = c.held ?? 0;
           const sold = c.sold ?? 0;
+          const resolved = resolveNightPrice(t.base_price_satang, c.stay_date,
+            c.price_satang !== null ? { stay_date: c.stay_date, price_satang: c.price_satang, is_closed: false, min_nights: null } : undefined,
+            rules.get(t.id) ?? []);
           return {
             date: c.stay_date,
+            physical: total + t.out_of_order,
+            outOfOrder: t.out_of_order,
             total,
             held,
             sold,
             free: Math.max(0, total - held - sold),
             closed: !!c.is_closed,
-            price: c.price_satang ?? t.base_price_satang,
+            price: resolved.price,
+            priceSource: resolved.label,
             priceOverridden: c.price_satang !== null,
             minNights: c.min_nights,
           };

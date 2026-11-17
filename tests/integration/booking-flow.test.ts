@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { listChangeRequests, reviewChangeRequest } from "@/server/approvals";
 import { assignRoom, changeBookingStatus, createBooking, getBooking, getCalendar, searchAvailability } from "@/server/booking";
-import { getRoomType, saveRoom, saveRoomType, setDailyRates } from "@/server/catalog";
+import { bulkCreateRooms, getRoomType, listPriceRules, savePriceRule, saveRoom, saveRoomType, setDailyRates } from "@/server/catalog";
 import { admin, closePools, fahtalay, guest, staff, stay, useAppPool, useDateBase } from "../setup/helpers";
 
 let ctx: Awaited<ReturnType<typeof fahtalay>>;
@@ -71,6 +71,52 @@ describe("booking lifecycle", () => {
   });
 });
 
+describe("pricing rules, tax and rooms", () => {
+  it("weekday rule applies to booked nights and the source is stored per night", async () => {
+    const owner = await staff(ctx.tenantId, "owner");
+    const villa = ctx.types["villa-garden-view"];
+    await savePriceRule(ctx.tenantId, { room_type_id: villa, name: "ศุกร์-เสาร์ (test)", kind: "weekday", date_from: null, date_to: null, weekdays: [0, 1, 2, 3, 4, 5, 6], price_satang: 777700, priority: 999, is_active: true }, owner);
+    const s = stay(1);
+    const b = await createBooking(ctx.tenantId, { propertyId: ctx.propertyId, ...s, rooms: [{ roomTypeId: villa, adults: 2, children: 0, extraBeds: 0 }], guest, source: "web" }, { type: "guest" });
+    expect(b.total).toBe(777700);
+    const night = (await admin().query(
+      `SELECT bn.room_satang, bn.price_source FROM booking_nights bn JOIN booking_rooms br ON br.id = bn.booking_room_id
+       JOIN bookings x ON x.id = br.booking_id WHERE x.code = $1`, [b.code])).rows[0];
+    expect(night.room_satang).toBe(777700);
+    expect(night.price_source).toMatch(/^rule:/);
+    // clean up so other tests see base prices
+    const rule = (await listPriceRules(ctx.tenantId, ctx.propertyId)).find((r) => r.name === "ศุกร์-เสาร์ (test)")!;
+    await savePriceRule(ctx.tenantId, { ...rule, delete: true }, owner);
+  });
+
+  it("tax-exclusive property adds service charge and VAT once to the booking total", async () => {
+    await admin().query("UPDATE properties SET prices_include_tax = false, service_charge_bp = 1000, vat_bp = 700 WHERE id = $1", [ctx.propertyId]);
+    try {
+      const b = await createBooking(ctx.tenantId, { propertyId: ctx.propertyId, ...stay(1), rooms: [deluxe()], guest, source: "web" }, { type: "guest" });
+      const row = (await admin().query("SELECT subtotal_satang, service_charge_satang, vat_satang, total_satang FROM bookings WHERE code = $1", [b.code])).rows[0];
+      expect(row.service_charge_satang).toBe(Math.round(row.subtotal_satang * 0.1));
+      expect(row.total_satang).toBe(row.subtotal_satang + row.service_charge_satang + row.vat_satang);
+      expect(b.total).toBe(row.total_satang);
+    } finally {
+      await admin().query("UPDATE properties SET prices_include_tax = true, service_charge_bp = 0, vat_bp = 700 WHERE id = $1", [ctx.propertyId]);
+    }
+  });
+
+  it("bulk room creation adds sellable inventory and rejects duplicate numbers", async () => {
+    const owner = await staff(ctx.tenantId, "owner");
+    const s = stay(1);
+    const before = await free(s.checkIn, s.checkOut);
+    const nums = await bulkCreateRooms(ctx.tenantId, { room_type_id: ctx.types["deluxe-sea-view"], start: "D901", count: 3, building: "D", floor: "9", zone: null }, owner);
+    expect(nums).toEqual(["D901", "D902", "D903"]);
+    expect(await free(s.checkIn, s.checkOut)).toBe(before + 3);
+    await expect(bulkCreateRooms(ctx.tenantId, { room_type_id: ctx.types["deluxe-sea-view"], start: "D903", count: 2, building: null, floor: null, zone: null }, owner))
+      .rejects.toThrow(/D903/);
+    const rooms = (await getRoomType(ctx.tenantId, ctx.types["deluxe-sea-view"]))!.rooms.filter((r) => nums.includes(r.room_number));
+    for (const r of rooms) await saveRoom(ctx.tenantId, { ...r, status: "inactive" }, owner);
+    expect(await free(s.checkIn, s.checkOut)).toBe(before);
+  });
+});
+
 describe("owner approval (maker-checker)", () => {
   it("admin cancelling a confirmed booking waits for the owner", async () => {
     const adm = await staff(ctx.tenantId, "admin");
@@ -117,6 +163,6 @@ describe("owner approval (maker-checker)", () => {
       await createBooking(ctx.tenantId, { propertyId: ctx.propertyId, ...s, rooms: [{ roomTypeId: ctx.types["family-suite"], adults: 2, children: 0, extraBeds: 0 }], guest, source: "phone", confirmNow: true }, owner);
     const rt = (await getRoomType(ctx.tenantId, ctx.types["family-suite"]))!;
     const r = rt.rooms[0];
-    await expect(saveRoom(ctx.tenantId, { id: r.id, room_type_id: rt.id, room_number: r.room_number, floor: null, status: "maintenance", note: null }, owner)).rejects.toThrow(/ไม่สามารถลดจำนวนห้อง/);
+    await expect(saveRoom(ctx.tenantId, { ...r, status: "maintenance" }, owner)).rejects.toThrow(/ไม่สามารถลดจำนวนห้อง/);
   });
 });

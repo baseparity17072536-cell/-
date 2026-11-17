@@ -6,7 +6,7 @@ import { can, ForbiddenError } from "./rbac";
 
 // Maker-checker workflow: admins request sensitive changes, the owner (approver) applies them.
 
-export type ChangeKind = "booking.status" | "room_type.prices" | "daily_rates.set" | "rate_plan.save" | "property.update";
+export type ChangeKind = "booking.status" | "room_type.prices" | "daily_rates.set" | "rate_plan.save" | "price_rule.save" | "property.update";
 
 type Handler = (tx: Tx, tenantId: string, payload: never, approver: Actor) => Promise<void>;
 const handlers = new Map<ChangeKind, Handler>();

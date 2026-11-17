@@ -39,6 +39,7 @@ export type PropertyRecord = {
   address: string | null; facebook_url: string | null; line_url: string | null; timezone: string;
   check_in_time: string; check_out_time: string; hold_minutes: number; max_nights: number; booking_window_days: number;
   damage_deposit_satang: number; child_max_age: number; is_active: boolean;
+  prices_include_tax: boolean; vat_bp: number; service_charge_bp: number; tax_id: string | null; legal_name: string | null;
 };
 
 export async function listProperties(tenantId: string) {
@@ -54,16 +55,19 @@ export async function getProperty(tenantId: string, propertyId: string) {
 export type PropertyInput = Omit<PropertyRecord, "id" | "slug" | "is_active" | "timezone">;
 
 async function applyPropertyUpdate(tx: Tx, tenantId: string, p: { id: string } & PropertyInput, actor: Actor) {
-  const r = await tx.query(
+  const before = await one<PropertyRecord>(tx, "SELECT * FROM properties WHERE id = $1 FOR UPDATE", [p.id]);
+  if (!before) throw new DomainError("NOT_FOUND", "ไม่พบที่พัก");
+  await tx.query(
     `UPDATE properties SET name_th=$2, name_en=$3, phone=$4, email=$5, address=$6, facebook_url=$7, line_url=$8,
        check_in_time=$9, check_out_time=$10, hold_minutes=$11, max_nights=$12, booking_window_days=$13,
-       damage_deposit_satang=$14, child_max_age=$15
+       damage_deposit_satang=$14, child_max_age=$15, prices_include_tax=$16, vat_bp=$17, service_charge_bp=$18,
+       tax_id=$19, legal_name=$20
      WHERE id = $1`,
     [p.id, p.name_th, p.name_en, p.phone, p.email, p.address, p.facebook_url, p.line_url, p.check_in_time, p.check_out_time,
-     p.hold_minutes, p.max_nights, p.booking_window_days, p.damage_deposit_satang, p.child_max_age],
+     p.hold_minutes, p.max_nights, p.booking_window_days, p.damage_deposit_satang, p.child_max_age,
+     p.prices_include_tax, p.vat_bp, p.service_charge_bp, p.tax_id, p.legal_name],
   );
-  if (!r.rowCount) throw new DomainError("NOT_FOUND", "ไม่พบที่พัก");
-  await audit(tx, tenantId, actor, "property.update", "property", p.id, p);
+  await audit(tx, tenantId, actor, "property.update", "property", p.id, { before, after: p });
 }
 
 export async function updateProperty(tenantId: string, input: { id: string } & PropertyInput, actor: Actor): Promise<ApplyResult> {
@@ -83,7 +87,8 @@ registerApprovalHandler("property.update", applyPropertyUpdate);
 
 // --------------------------------------------------------------- room types --
 export type RoomTypeRecord = {
-  id: string; property_id: string; slug: string; name_th: string; name_en: string | null; description_th: string;
+  id: string; property_id: string; slug: string; code: string; view_type: string; bed_count: number; building: string | null;
+  video_url: string | null; name_th: string; name_en: string | null; description_th: string;
   description_en: string | null; bed_info: string; size_sqm: number | null; base_adults: number; max_adults: number;
   max_children: number; max_occupancy: number; max_extra_beds: number; base_price_satang: number; extra_adult_satang: number;
   child_satang: number; extra_bed_satang: number; amenities: string[]; sort_order: number; is_active: boolean;
@@ -111,8 +116,9 @@ export async function getRoomType(tenantId: string, id: string) {
     const images = await many<{ id: string; url: string; alt: string; sort_order: number }>(
       tx, "SELECT id, url, alt, sort_order FROM room_type_images WHERE room_type_id = $1 ORDER BY sort_order, created_at", [id],
     );
-    const rooms = await many<{ id: string; room_number: string; floor: string | null; status: string; note: string | null }>(
-      tx, "SELECT id, room_number, floor, status, note FROM rooms WHERE room_type_id = $1 ORDER BY room_number", [id],
+    const rooms = await many<RoomRecord>(
+      tx, `SELECT id, room_type_id, room_number, building, floor, zone, status, housekeeping_status, note
+           FROM rooms WHERE room_type_id = $1 ORDER BY room_number`, [id],
     );
     return { ...t, images, rooms };
   });
@@ -128,12 +134,14 @@ function checkOccupancy(t: RoomTypeInput) {
 }
 
 async function applyRoomTypePrices(tx: Tx, tenantId: string, p: PriceChange, actor: Actor) {
+  const before = await one<Pick<RoomTypeRecord, (typeof PRICE_FIELDS)[number]>>(
+    tx, `SELECT ${PRICE_FIELDS.join(", ")} FROM room_types WHERE id = $1`, [p.id]);
   const r = await tx.query(
     `UPDATE room_types SET base_price_satang=$2, extra_adult_satang=$3, child_satang=$4, extra_bed_satang=$5 WHERE id=$1`,
     [p.id, p.base_price_satang, p.extra_adult_satang, p.child_satang, p.extra_bed_satang],
   );
   if (!r.rowCount) throw new DomainError("NOT_FOUND", "ไม่พบประเภทห้อง");
-  await audit(tx, tenantId, actor, "room_type.prices", "room_type", p.id, p);
+  await audit(tx, tenantId, actor, "room_type.prices", "room_type", p.id, { name: p.name, before, after: p });
 }
 registerApprovalHandler("room_type.prices", applyRoomTypePrices);
 
@@ -155,13 +163,15 @@ export async function saveRoomType(tenantId: string, t: RoomTypeInput, actor: Ac
             tx,
             `INSERT INTO room_types (tenant_id, property_id, slug, name_th, name_en, description_th, description_en, bed_info,
                size_sqm, base_adults, max_adults, max_children, max_occupancy, max_extra_beds, base_price_satang,
-               extra_adult_satang, child_satang, extra_bed_satang, amenities, sort_order, is_active)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
+               extra_adult_satang, child_satang, extra_bed_satang, amenities, sort_order, is_active,
+               code, view_type, bed_count, building, video_url)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING id`,
             [tenantId, t.property_id, t.slug, t.name_th, t.name_en, t.description_th, t.description_en, t.bed_info, t.size_sqm,
              t.base_adults, t.max_adults, t.max_children, t.max_occupancy, t.max_extra_beds, t.base_price_satang,
-             t.extra_adult_satang, t.child_satang, t.extra_bed_satang, t.amenities, t.sort_order, t.is_active],
+             t.extra_adult_satang, t.child_satang, t.extra_bed_satang, t.amenities, t.sort_order, t.is_active,
+             t.code, t.view_type, t.bed_count, t.building, t.video_url],
           ),
-        "รหัส (slug) ของประเภทห้องนี้ถูกใช้แล้ว",
+        "รหัสประเภทห้อง (code) หรือ slug นี้ถูกใช้แล้ว",
         tx,
       );
       await audit(tx, tenantId, actor, "room_type.create", "room_type", row!.id, { name: t.name_th });
@@ -175,12 +185,13 @@ export async function saveRoomType(tenantId: string, t: RoomTypeInput, actor: Ac
         tx.query(
           `UPDATE room_types SET slug=$2, name_th=$3, name_en=$4, description_th=$5, description_en=$6, bed_info=$7, size_sqm=$8,
              base_adults=$9, max_adults=$10, max_children=$11, max_occupancy=$12, max_extra_beds=$13, amenities=$14,
-             sort_order=$15, is_active=$16
+             sort_order=$15, is_active=$16, code=$17, view_type=$18, bed_count=$19, building=$20, video_url=$21
            WHERE id = $1`,
           [t.id, t.slug, t.name_th, t.name_en, t.description_th, t.description_en, t.bed_info, t.size_sqm, t.base_adults,
-           t.max_adults, t.max_children, t.max_occupancy, t.max_extra_beds, t.amenities, t.sort_order, t.is_active],
+           t.max_adults, t.max_children, t.max_occupancy, t.max_extra_beds, t.amenities, t.sort_order, t.is_active,
+           t.code, t.view_type, t.bed_count, t.building, t.video_url],
         ),
-      "รหัส (slug) ของประเภทห้องนี้ถูกใช้แล้ว",
+      "รหัสประเภทห้อง (code) หรือ slug นี้ถูกใช้แล้ว",
       tx,
     );
     await audit(tx, tenantId, actor, "room_type.update", "room_type", t.id, { name: t.name_th });
@@ -206,7 +217,96 @@ export async function saveRoomType(tenantId: string, t: RoomTypeInput, actor: Ac
 }
 
 // --------------------------------------------------------------------- rooms --
-export type RoomInput = { id?: string; room_type_id: string; room_number: string; floor: string | null; status: "active" | "maintenance" | "inactive"; note: string | null };
+export type RoomStatus = "active" | "maintenance" | "inactive";
+export type HousekeepingStatus = "clean" | "dirty" | "inspected" | "out_of_service";
+export type RoomRecord = {
+  id: string; room_type_id: string; room_number: string; building: string | null; floor: string | null; zone: string | null;
+  status: RoomStatus; housekeeping_status: HousekeepingStatus; note: string | null;
+};
+export type RoomInput = Omit<RoomRecord, "id" | "housekeeping_status"> & { id?: string; housekeeping_status?: HousekeepingStatus };
+
+export async function listRooms(tenantId: string, propertyId: string) {
+  return withTenant(tenantId, (tx) =>
+    many<RoomRecord & { type_name: string; type_code: string }>(
+      tx,
+      `SELECT r.id, r.room_type_id, r.room_number, r.building, r.floor, r.zone, r.status, r.housekeeping_status, r.note,
+              t.name_th AS type_name, t.code AS type_code
+       FROM rooms r JOIN room_types t ON t.id = r.room_type_id
+       WHERE t.property_id = $1 ORDER BY r.building NULLS FIRST, r.room_number`,
+      [propertyId],
+    ),
+  );
+}
+
+/** History of one physical room: assignments and audit entries. */
+export async function roomHistory(tenantId: string, roomId: string) {
+  return withTenant(tenantId, async (tx) => ({
+    stays: await many<{ code: string; guest: string; stay: string; active: boolean; status: string }>(
+      tx,
+      `SELECT b.code, g.full_name AS guest, ra.stay::text AS stay, ra.active, b.status
+       FROM room_assignments ra JOIN booking_rooms br ON br.id = ra.booking_room_id
+       JOIN bookings b ON b.id = br.booking_id JOIN guests g ON g.id = b.guest_id
+       WHERE ra.room_id = $1 ORDER BY lower(ra.stay) DESC LIMIT 100`,
+      [roomId],
+    ),
+    changes: await many<{ action: string; data: Record<string, unknown> | null; created_at: Date; user_name: string | null }>(
+      tx,
+      `SELECT a.action, a.data, a.created_at, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
+       WHERE a.entity = 'room' AND a.entity_id = $1 ORDER BY a.id DESC LIMIT 100`,
+      [roomId],
+    ),
+  }));
+}
+
+/**
+ * Expand a numbering pattern: the trailing digits of `start` are incremented, keeping width.
+ * "A101" x3 -> A101 A102 A103 · "V01" x2 -> V01 V02 · "ROOM001" x2 -> ROOM001 ROOM002
+ */
+export function expandRoomNumbers(start: string, count: number) {
+  const m = /^(.*?)(\d+)$/.exec(start.trim());
+  if (!m) throw new DomainError("VALIDATION", "หมายเลขเริ่มต้นต้องลงท้ายด้วยตัวเลข เช่น A101, 101, V01, ROOM001");
+  if (!Number.isInteger(count) || count < 1 || count > 200) throw new DomainError("VALIDATION", "เพิ่มได้ครั้งละ 1–200 ห้อง");
+  const [, prefix, digits] = m;
+  const first = Number(digits);
+  return Array.from({ length: count }, (_, i) => `${prefix}${String(first + i).padStart(digits.length, "0")}`);
+}
+
+export async function bulkCreateRooms(
+  tenantId: string,
+  input: { room_type_id: string; start: string; count: number; building: string | null; floor: string | null; zone: string | null },
+  actor: Actor,
+) {
+  decision(actor, "catalog.edit");
+  const numbers = expandRoomNumbers(input.start, input.count);
+  return withTenant(tenantId, async (tx) => {
+    const type = await one<{ timezone: string }>(
+      tx, `SELECT p.timezone FROM room_types t JOIN properties p ON p.id = t.property_id WHERE t.id = $1 FOR UPDATE OF t`, [input.room_type_id]);
+    if (!type) throw new DomainError("NOT_FOUND", "ไม่พบประเภทห้อง");
+    const dup = await many<{ room_number: string }>(
+      tx, "SELECT room_number FROM rooms WHERE room_type_id = $1 AND room_number = ANY($2::text[]) ORDER BY room_number",
+      [input.room_type_id, numbers]);
+    if (dup.length) throw new DomainError("VALIDATION", `หมายเลขห้องซ้ำ: ${dup.map((d) => d.room_number).join(", ")}`, { duplicates: dup.map((d) => d.room_number) });
+    await tx.query(
+      `INSERT INTO rooms (tenant_id, room_type_id, room_number, building, floor, zone)
+       SELECT $1, $2, n, $4, $5, $6 FROM unnest($3::text[]) AS n`,
+      [tenantId, input.room_type_id, numbers, input.building, input.floor, input.zone],
+    );
+    await resyncInventoryTotals(tx, tenantId, input.room_type_id, todayIn(type.timezone));
+    await audit(tx, tenantId, actor, "room.bulk_create", "room_type", input.room_type_id, { numbers });
+    return numbers;
+  });
+}
+
+export async function setHousekeepingStatus(tenantId: string, roomId: string, status: HousekeepingStatus, actor: Actor) {
+  decision(actor, "booking.status");
+  return withTenant(tenantId, async (tx) => {
+    const r = await one<{ room_number: string; prev: string }>(
+      tx, `UPDATE rooms r SET housekeeping_status = $2 FROM (SELECT housekeeping_status AS prev FROM rooms WHERE id = $1) p
+           WHERE r.id = $1 RETURNING r.room_number, p.prev`, [roomId, status]);
+    if (!r) throw new DomainError("NOT_FOUND", "ไม่พบห้องนี้");
+    await audit(tx, tenantId, actor, "room.housekeeping", "room", roomId, { room_number: r.room_number, before: r.prev, after: status });
+  });
+}
 
 export async function saveRoom(tenantId: string, r: RoomInput, actor: Actor) {
   decision(actor, "catalog.edit");
@@ -231,7 +331,9 @@ export async function saveRoom(tenantId: string, r: RoomInput, actor: Actor) {
         if (busy!.n > 0) throw new DomainError("CONFLICT", "ห้องนี้มีการจัดผู้เข้าพักในอนาคตอยู่ กรุณาย้ายห้องให้การจองนั้นก่อน");
       }
       await uniqueGuard(
-        () => tx.query("UPDATE rooms SET room_number=$2, floor=$3, status=$4, note=$5 WHERE id=$1", [id, r.room_number, r.floor, r.status, r.note]),
+        () => tx.query(
+          "UPDATE rooms SET room_number=$2, floor=$3, status=$4, note=$5, building=$6, zone=$7 WHERE id=$1",
+          [id, r.room_number, r.floor, r.status, r.note, r.building, r.zone]),
         `เลขห้อง ${r.room_number} มีอยู่แล้ว`,
         tx,
       );
@@ -240,8 +342,9 @@ export async function saveRoom(tenantId: string, r: RoomInput, actor: Actor) {
         () =>
           one<{ id: string }>(
             tx,
-            "INSERT INTO rooms (tenant_id, room_type_id, room_number, floor, status, note) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
-            [tenantId, r.room_type_id, r.room_number, r.floor, r.status, r.note],
+            `INSERT INTO rooms (tenant_id, room_type_id, room_number, floor, status, note, building, zone)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+            [tenantId, r.room_type_id, r.room_number, r.floor, r.status, r.note, r.building, r.zone],
           ),
         `เลขห้อง ${r.room_number} มีอยู่แล้ว`,
         tx,
@@ -382,6 +485,12 @@ function addOne(d: string) {
 async function applyDailyRates(tx: Tx, tenantId: string, c: DailyRateChange, actor: Actor) {
   const dates = datesFor(c);
   if (!dates.length) throw new DomainError("VALIDATION", "ไม่มีวันที่ตรงกับเงื่อนไขที่เลือก");
+  const before = await many<{ room_type_id: string; stay_date: string; price_satang: number | null; is_closed: boolean; min_nights: number | null }>(
+    tx,
+    `SELECT room_type_id, stay_date, price_satang, is_closed, min_nights FROM daily_rates
+     WHERE room_type_id = ANY($1::uuid[]) AND stay_date = ANY($2::date[]) ORDER BY room_type_id, stay_date`,
+    [c.roomTypeIds, dates],
+  );
   for (const typeId of c.roomTypeIds) {
     await tx.query(
       `INSERT INTO daily_rates (tenant_id, room_type_id, stay_date, price_satang, is_closed, min_nights)
@@ -405,7 +514,82 @@ async function applyDailyRates(tx: Tx, tenantId: string, c: DailyRateChange, act
        AND price_satang IS NULL AND NOT is_closed AND min_nights IS NULL`,
     [c.roomTypeIds, dates],
   );
-  await audit(tx, tenantId, actor, "daily_rates.set", "room_type", c.roomTypeIds.join(","), { ...c, nights: dates.length });
+  await audit(tx, tenantId, actor, "daily_rates.set", "room_type", c.roomTypeIds.join(","), {
+    change: c, nights: dates.length, before_overrides: before,
+  });
+}
+
+// --------------------------------------------------------------- price rules --
+export type PriceRuleRecord = {
+  id: string; room_type_id: string; name: string; kind: "weekday" | "season" | "holiday" | "event";
+  date_from: string | null; date_to: string | null; weekdays: number[]; price_satang: number; priority: number;
+  is_active: boolean; created_at: Date;
+};
+export type PriceRuleInput = Omit<PriceRuleRecord, "id" | "created_at"> & { id?: string; delete?: boolean };
+
+export async function listPriceRules(tenantId: string, propertyId: string) {
+  return withTenant(tenantId, (tx) =>
+    many<PriceRuleRecord & { type_name: string }>(
+      tx,
+      `SELECT r.id, r.room_type_id, r.name, r.kind, r.date_from::text, r.date_to::text, r.weekdays::int[] AS weekdays,
+              r.price_satang, r.priority, r.is_active, r.created_at, t.name_th AS type_name
+       FROM price_rules r JOIN room_types t ON t.id = r.room_type_id
+       WHERE t.property_id = $1 ORDER BY t.sort_order, r.priority DESC, r.created_at DESC`,
+      [propertyId],
+    ),
+  );
+}
+
+async function applyPriceRule(tx: Tx, tenantId: string, p: PriceRuleInput, actor: Actor) {
+  const before = p.id ? await one<PriceRuleRecord>(tx, "SELECT * FROM price_rules WHERE id = $1 FOR UPDATE", [p.id]) : null;
+  if (p.id && !before) throw new DomainError("NOT_FOUND", "ไม่พบกฎราคา");
+  if (p.delete) {
+    await tx.query("DELETE FROM price_rules WHERE id = $1", [p.id]);
+    await audit(tx, tenantId, actor, "price_rule.delete", "price_rule", p.id!, { before });
+    return;
+  }
+  const values = [p.room_type_id, p.name, p.kind, p.date_from, p.date_to, p.weekdays, p.price_satang, p.priority, p.is_active];
+  let id = p.id;
+  if (id) {
+    await tx.query(
+      `UPDATE price_rules SET room_type_id=$2, name=$3, kind=$4, date_from=$5, date_to=$6, weekdays=$7, price_satang=$8,
+         priority=$9, is_active=$10 WHERE id=$1`, [id, ...values]);
+  } else {
+    id = (await one<{ id: string }>(
+      tx,
+      `INSERT INTO price_rules (tenant_id, room_type_id, name, kind, date_from, date_to, weekdays, price_satang, priority, is_active, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+      [tenantId, ...values, actor.type === "staff" ? actor.userId : null],
+    ))!.id;
+  }
+  await audit(tx, tenantId, actor, p.id ? "price_rule.update" : "price_rule.create", "price_rule", id!, { before, after: p });
+}
+registerApprovalHandler("price_rule.save", applyPriceRule);
+
+export async function savePriceRule(tenantId: string, p: PriceRuleInput, actor: Actor): Promise<ApplyResult> {
+  const d = decision(actor, "rates.edit");
+  if (!p.delete) {
+    if (p.date_from && p.date_to && p.date_to < p.date_from) throw new DomainError("VALIDATION", "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม");
+    if (p.weekdays.some((w) => w < 0 || w > 6)) throw new DomainError("VALIDATION", "วันในสัปดาห์ไม่ถูกต้อง");
+    if (p.kind === "weekday" && !p.weekdays.length) throw new DomainError("VALIDATION", "กฎราคาตามวันในสัปดาห์ต้องเลือกอย่างน้อย 1 วัน");
+    if ((p.kind === "season" || p.kind === "holiday" || p.kind === "event") && (!p.date_from || !p.date_to))
+      throw new DomainError("VALIDATION", "กฎราคาตามฤดูกาล/เทศกาลต้องระบุช่วงวันที่");
+  }
+  return withTenant(tenantId, async (tx) => {
+    if (d === "approval") {
+      const typeName = (await one<{ name_th: string }>(tx, "SELECT name_th FROM room_types WHERE id = $1", [p.room_type_id]))?.name_th ?? "";
+      const requestId = await createChangeRequest(tx, tenantId, actor, {
+        kind: "price_rule.save", entityId: p.id ?? null,
+        summary: p.delete
+          ? `ลบกฎราคา “${p.name}” (${typeName})`
+          : `${p.id ? "แก้ไข" : "เพิ่ม"}กฎราคา “${p.name}” ${typeName}: ฿${baht(p.price_satang)}/คืน ลำดับความสำคัญ ${p.priority}`,
+        payload: p,
+      });
+      return { applied: false, pendingApproval: true, requestId };
+    }
+    await applyPriceRule(tx, tenantId, p, actor);
+    return { applied: true, pendingApproval: false };
+  });
 }
 registerApprovalHandler("daily_rates.set", applyDailyRates);
 
