@@ -27,7 +27,12 @@
 | **Transaction pooler** | `…pooler.supabase.com:6543/postgres` | `DATABASE_URL` ของแอปบน Vercel (ข้อ 3) |
 
 3. ใน `DATABASE_URL` (ข้อ 3) ให้เปลี่ยนผู้ใช้เป็น **`fahtalay_app.<ref>`** (ต้องมี `.<ref>` ต่อท้ายเมื่อผ่าน pooler) และรหัสผ่านเป็น `DATABASE_APP_PASSWORD` เช่น
-   `postgresql://fahtalay_app.abcdxyz:<APP_PW>@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require`
+   `postgresql://fahtalay_app.abcdxyz:<APP_PW>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require&uselibpqcompat=true`
+   (ทดสอบแล้ว: Supabase ใช้ใบรับรองของตัวเอง ถ้าใช้ `sslmode=require` อย่างเดียวจะขึ้น `self-signed certificate in certificate chain`)
+
+**ติดตั้งโดยไม่ต้องส่งรหัสผ่านฐานข้อมูลให้ใคร:** สร้างไฟล์ติดตั้งด้วย
+`npx tsx scripts/build-setup-sql.ts --out setup.sql --host <โดเมน>` แล้ววางใน Supabase → **SQL Editor** → Run
+(ตรวจไฟล์ก่อนใช้ได้ด้วย `npx tsx scripts/verify-setup-sql.ts setup.sql <app-password> <โดเมน>`) — ไฟล์มีรหัสผ่าน ห้าม commit
 4. **ปิด Data API** (แอปนี้ไม่ใช้): Project Settings → Data API → ปิด หรือเอา `public` ออกจาก Exposed schemas
    — migration `0003_supabase_hardening` ถอนสิทธิ์ของ `anon`/`authenticated` จากทุกตารางให้อยู่แล้ว (มี test ยืนยัน) การปิด Data API เป็นชั้นป้องกันเพิ่ม
 5. ห้ามนำ `service_role` key หรือ `anon` key มาใส่ในโปรเจกต์นี้ — ไม่จำเป็นต้องใช้
