@@ -84,6 +84,11 @@ Vercel → Project → **Settings → Environment Variables** (Production):
 | `password authentication failed for user "fahtalay_app"` | รหัสผ่านใน `DATABASE_URL` ไม่ตรงกับ `DATABASE_APP_PASSWORD` ตอน migrate | รัน `npm run db:migrate` ใหม่ด้วยรหัสเดิม หรือแก้ `DATABASE_URL` |
 | `relation "tenants" does not exist` | ยังไม่ได้ migrate | ข้อ 2 |
 
+## ตำแหน่งเซิร์ฟเวอร์ (สำคัญต่อความเร็ว)
+ให้ฟังก์ชันของ Vercel อยู่ region เดียวกับฐานข้อมูล ตั้งใน `vercel.json` → `"regions": ["bom1"]` (Supabase ของฟ้าทะเลอยู่ Mumbai)
+วัดจริง 2026-11-17: ก่อนย้าย (iad1 ↔ Mumbai) หน้าค้นหา/กรอกข้อมูล ~5 วินาที · หลังย้าย (bom1) ~0.2–0.5 วินาที
+ถ้าติดตั้งให้โรงแรมอื่นที่ฐานข้อมูลอยู่ region อื่น ให้เปลี่ยนค่านี้ให้ตรงกัน (เช่น Singapore = `sin1`)
+
 ## ข้อจำกัดบน Vercel ที่ต้องรู้
 - **อัปโหลดรูปห้องจากหลังบ้านยังใช้ไม่ได้บน Vercel** (Vercel เขียนไฟล์ถาวรไม่ได้) รูปเริ่มต้นจาก seed แสดงได้ปกติ — ต้องเพิ่ม object storage (Vercel Blob / S3) ซึ่งอยู่ในรายการ Pending Configuration
 - การส่งอีเมล/LINE ยังเป็นคิวในฐานข้อมูล ยังไม่ส่งจริง (Phase 6)
