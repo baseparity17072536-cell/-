@@ -1,7 +1,7 @@
 "use client";
 
 import Form from "next/form";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { BedDouble, CalendarDays, ChevronDown, Search, User } from "lucide-react";
 
 type Props = {
@@ -15,10 +15,18 @@ function plusOneDay(date: string) {
   return d.toISOString().slice(0, 10);
 }
 
+// วันนี้ตามเวลาไทย คำนวณฝั่ง browser เท่านั้น (หน้าแรก prerender ไว้ล่วงหน้า ถ้าคำนวณตอน build วันที่จะค้าง)
+function todayInBangkok() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+}
+const noop = () => () => {};
+const serverToday = () => undefined;
+
 /** ฟอร์มค้นหาห้องว่าง ส่งแบบ GET ไปที่ /booking */
 export default function StaySearchForm({ defaults = {}, title = "จองห้องพัก" }: Props) {
   const [checkIn, setCheckIn] = useState(defaults.checkIn ?? "");
   const [checkOut, setCheckOut] = useState(defaults.checkOut ?? "");
+  const today = useSyncExternalStore(noop, todayInBangkok, serverToday);
 
   const cell = "flex items-center gap-3 rounded-xl bg-cream px-4 py-2.5 ring-1 ring-cream-200";
   const label = "block text-[11px] text-ink/60";
@@ -37,6 +45,7 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
               name="checkin"
               type="date"
               required
+              min={today}
               value={checkIn}
               onChange={(e) => {
                 const v = e.target.value;

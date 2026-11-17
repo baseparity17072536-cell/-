@@ -7,6 +7,8 @@ import { CheckCircle2, Clock, Phone, XCircle } from "lucide-react";
 import Steps from "@/components/steps";
 import Skeleton from "@/components/skeleton";
 import { CancelForm, PrintButton } from "@/components/booking-forms";
+import { isAdmin } from "@/lib/admin-auth";
+import { hasBookingAccess } from "@/lib/booking-access";
 import { findBooking, isExpired, type Booking } from "@/lib/bookings";
 import { formatBaht, formatThaiDate, formatThaiDateTime } from "@/lib/dates";
 import { RESORT } from "@/lib/rooms";
@@ -33,6 +35,8 @@ async function BookingView({ params, searchParams }: PageProps<"/booking/[code]"
   const b = await findBooking(code);
   if (!b) notFound();
 
+  // ข้อมูลส่วนบุคคลแสดงเฉพาะผู้ที่ยืนยันเบอร์โทรแล้ว หรือเจ้าหน้าที่
+  const canSeePersonal = (await hasBookingAccess(b.code)) || (await isAdmin());
   const expired = isExpired(b);
   const deadline = new Date(Date.parse(b.createdAt) + RESORT.holdHours * 3_600_000).toISOString();
 
@@ -57,15 +61,27 @@ async function BookingView({ params, searchParams }: PageProps<"/booking/[code]"
         </div>
 
         <dl className="grid gap-x-8 gap-y-4 p-6 text-sm sm:grid-cols-2">
-          <Item label="ผู้เข้าพัก" value={b.guest.name} />
-          <Item label="เบอร์โทรศัพท์" value={b.guest.phone} />
+          {canSeePersonal ? (
+            <>
+              <Item label="ผู้เข้าพัก" value={b.guest.name} />
+              <Item label="เบอร์โทรศัพท์" value={b.guest.phone} />
+            </>
+          ) : (
+            <div className="rounded-lg bg-cream px-4 py-3 sm:col-span-2 print:hidden">
+              ข้อมูลผู้เข้าพักถูกซ่อนไว้เพื่อความเป็นส่วนตัว ·{" "}
+              <Link href="/booking/lookup" className="font-semibold text-gold-600 underline">
+                ยืนยันด้วยเบอร์โทรศัพท์
+              </Link>{" "}
+              เพื่อดูรายละเอียดทั้งหมด
+            </div>
+          )}
           <Item label="ห้องพัก" value={`${b.roomName} × ${b.rooms} ห้อง`} />
           <Item label="จำนวนผู้เข้าพัก" value={`${b.guests} ผู้ใหญ่`} />
           <Item label="เช็คอิน" value={`${formatThaiDate(b.checkIn, { weekday: "long" })} หลัง ${RESORT.checkInTime} น.`} />
           <Item label="เช็คเอาท์" value={`${formatThaiDate(b.checkOut, { weekday: "long" })} ก่อน ${RESORT.checkOutTime} น.`} />
           <Item label="จำนวนคืน" value={`${b.nights} คืน`} />
           <Item label="วันที่ทำรายการ" value={formatThaiDateTime(b.createdAt)} />
-          {b.guest.note && <Item label="คำขอพิเศษ" value={b.guest.note} wide />}
+          {canSeePersonal && b.guest.note && <Item label="คำขอพิเศษ" value={b.guest.note} wide />}
         </dl>
 
         <div className="flex items-end justify-between border-t border-cream-200 px-6 py-4">

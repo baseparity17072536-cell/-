@@ -17,18 +17,22 @@ export default function RoomsCarousel({ rooms }: { rooms: Room[] }) {
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
+  function itemWidth() {
+    const first = track.current?.firstElementChild as HTMLElement | null | undefined;
+    return first?.offsetWidth ?? 0;
+  }
+
   function scroll(dir: number) {
-    const el = track.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * (el.firstElementChild as HTMLElement).offsetWidth, behavior: "smooth" });
+    const w = itemWidth();
+    if (w) track.current?.scrollBy({ left: dir * w, behavior: "smooth" });
   }
 
   function onScroll() {
-    const el = track.current;
-    if (!el) return;
-    const w = (el.firstElementChild as HTMLElement).offsetWidth;
-    setActive(Math.round(el.scrollLeft / w));
+    const w = itemWidth();
+    if (w && track.current) setActive(Math.round(track.current.scrollLeft / w));
   }
+
+  if (rooms.length === 0) return null;
 
   const arrow =
     "absolute top-[38%] z-10 hidden size-10 place-items-center rounded-full bg-white text-ink shadow-md ring-1 ring-cream-200 transition hover:bg-cream md:grid";

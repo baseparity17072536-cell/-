@@ -10,6 +10,7 @@ import {
   lookupBookingAction,
   type FormState,
 } from "@/app/actions";
+import { RESORT } from "@/lib/rooms";
 
 const field =
   "mt-1 w-full rounded-lg border border-cream-200 bg-cream px-4 py-3 outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-300/40";
@@ -64,7 +65,11 @@ export function GuestForm({ hidden }: { hidden: Record<string, string> }) {
       <label className="flex items-start gap-3 text-sm sm:col-span-2">
         <input name="accept" type="checkbox" required className="mt-1 size-4 accent-[#c49a4c]" />
         <span>
-          ฉันยอมรับเงื่อนไขการจอง: ระบบจะกันห้องไว้ 24 ชั่วโมงเพื่อรอการชำระเงิน
+          ฉันยอมรับ{" "}
+          <a href="/booking/policy" target="_blank" className="font-semibold text-gold-600 underline">
+            เงื่อนไขการจอง
+          </a>
+          : ระบบจะกันห้องไว้ {RESORT.holdHours} ชั่วโมงเพื่อรอการชำระเงิน
           หากไม่ได้ชำระภายในเวลาที่กำหนด การจองจะหมดอายุอัตโนมัติ
         </span>
       </label>

@@ -75,9 +75,11 @@ function Eyebrow({ children, light }: { children: React.ReactNode; light?: boole
 }
 
 function OutlineLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const external = href.startsWith("http");
   return (
     <a
       href={href}
+      {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       className="inline-flex items-center gap-2 rounded-full border border-gold-500 px-5 py-2 text-sm font-semibold text-ink transition hover:bg-gold-500 hover:text-white"
     >
       {children} <ArrowRight className="size-4" />
@@ -94,6 +96,8 @@ const social = {
   youtube:
     "M23.5 6.5a3 3 0 0 0-2.1-2.1C19.5 4 12 4 12 4s-7.5 0-9.4.4A3 3 0 0 0 .5 6.5 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.5 3 3 0 0 0 2.1 2.1c1.9.4 9.4.4 9.4.4s7.5 0 9.4-.4a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.5ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z",
 };
+
+const SOCIAL_LINKS: { key: keyof typeof social; href: string }[] = [{ key: "facebook", href: FACEBOOK_URL }];
 
 export default function Home() {
   return (
@@ -121,11 +125,12 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <div className="flex items-center rounded-full border border-white/60 px-3 py-1 text-xs">
-              <span className="font-semibold">TH</span>
-              <span className="mx-2 opacity-50">|</span>
-              <span className="opacity-70">EN</span>
-            </div>
+            <Link
+              href="/booking/lookup"
+              className="rounded-full border border-white/60 px-4 py-1.5 text-xs font-semibold transition hover:bg-white/10"
+            >
+              ตรวจสอบการจอง
+            </Link>
           </nav>
         </header>
 
@@ -185,7 +190,7 @@ export default function Home() {
             <h2 className="mt-1 text-3xl font-bold sm:text-4xl">ห้องพักของเรา</h2>
             <p className="mt-1 text-ink/70">เลือกห้องพักที่ใช่ สำหรับการพักผ่อนของคุณ</p>
           </div>
-          <OutlineLink href="#rooms">ดูห้องพักทั้งหมด</OutlineLink>
+          <OutlineLink href="/booking">ดูห้องว่างและราคา</OutlineLink>
         </div>
         <RoomsCarousel rooms={rooms} />
       </section>
@@ -197,11 +202,14 @@ export default function Home() {
             <Eyebrow light>SPECIAL OFFER</Eyebrow>
             <h2 className="mt-1 text-3xl font-bold sm:text-4xl">โปรโมชั่นพิเศษ</h2>
             <p className="mt-2 text-white/80">จองตรงกับรีสอร์ท รับสิทธิ์พิเศษมากมาย</p>
+            <p className="mt-2 text-xs text-white/70">
+              * ส่วนลดยังไม่ถูกคำนวณในระบบจองออนไลน์ กรุณาสอบถามเงื่อนไขที่ {PHONE} ก่อนชำระเงิน
+            </p>
             <a
-              href="#booking"
+              href={`tel:${PHONE.replaceAll("-", "")}`}
               className="bg-gold mt-6 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-ink shadow transition hover:brightness-110"
             >
-              ดูโปรโมชั่นทั้งหมด <ArrowRight className="size-4" />
+              สอบถามโปรโมชั่น <Phone className="size-4" />
             </a>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -282,7 +290,7 @@ export default function Home() {
               ใกล้อุทยานแห่งชาติเขาแหลมหญ้า–หมู่เกาะเสม็ด และท่าเรือบ้านเพ
             </p>
             <div className="mt-5">
-              <OutlineLink href={MAP_URL}>อ่านเพิ่มเติม</OutlineLink>
+              <OutlineLink href={MAP_URL}>ดูแผนที่</OutlineLink>
             </div>
           </div>
         </div>
@@ -329,11 +337,15 @@ export default function Home() {
           <div className="text-sm lg:pl-8">
             <p className="font-semibold text-white">บริการลูกค้า</p>
             <ul className="mt-3 space-y-1.5">
-              {["นโยบายการจอง", "เงื่อนไขการเข้าพัก", "คำถามที่พบบ่อย", "ติดต่อเรา"].map((t) => (
-                <li key={t}>
-                  <a href="#contact" className="hover:text-gold-300">
-                    {t}
-                  </a>
+              {[
+                { href: "/booking", label: "จองห้องพัก" },
+                { href: "/booking/lookup", label: "ตรวจสอบ / ยกเลิกการจอง" },
+                { href: "/booking/policy", label: "เงื่อนไขการจองและการเข้าพัก" },
+              ].map((l) => (
+                <li key={l.href}>
+                  <Link href={l.href} className="hover:text-gold-300">
+                    {l.label}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -342,10 +354,13 @@ export default function Home() {
           <div className="text-sm lg:pl-8">
             <p className="font-semibold text-white">ติดตามเรา</p>
             <div className="mt-3 flex gap-3">
-              {(Object.keys(social) as (keyof typeof social)[]).map((k) => (
+              {/* แสดงเฉพาะช่องทางที่มีลิงก์จริง — เพิ่ม URL ของ LINE / Instagram / YouTube ใน SOCIAL_LINKS เมื่อได้รับจากรีสอร์ท */}
+              {SOCIAL_LINKS.map(({ key: k, href }) => (
                 <a
                   key={k}
-                  href={k === "facebook" ? FACEBOOK_URL : "#contact"}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={k}
                   className="grid size-9 place-items-center rounded-full bg-white text-teal-deep transition hover:bg-gold-300"
                 >
