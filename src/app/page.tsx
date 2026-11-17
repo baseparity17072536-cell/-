@@ -14,15 +14,93 @@ import {
   Wifi,
 } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import Logo from "@/components/logo";
 import StaySearchForm from "@/components/stay-search-form";
-import { RESORT, ROOM_TYPES } from "@/lib/rooms";
-import { formatBaht } from "@/lib/dates";
+import { formatSatang } from "@/lib/money";
+import { getPublicRoomTypes, getSite } from "@/server/site";
 import RoomsCarousel, { type Room } from "./rooms-carousel";
 
-const PHONE = RESORT.phone;
-const FACEBOOK_URL = RESORT.facebook;
 const MAP_URL = "https://www.google.com/maps/search/?api=1&query=Fah+Talay+Resort+Ban+Phe+Rayong";
+
+async function Rooms() {
+  const types = await getPublicRoomTypes();
+  const rooms: Room[] = types.map((r) => ({
+    name: r.name_th,
+    image: r.images[0]?.url ?? "/images/room-1.jpg",
+    guests: `${r.max_occupancy} คน`,
+    beds: r.bed_info,
+    price: formatSatang(r.base_price_satang, { symbol: false }),
+  }));
+  return rooms.length ? <RoomsCarousel rooms={rooms} /> : <p className="text-ink/60">ยังไม่มีห้องพักเปิดขาย</p>;
+}
+
+async function PromoCall() {
+  const { property } = await getSite();
+  if (!property.phone) return null;
+  return (
+    <>
+      <p className="mt-2 text-xs text-white/70">
+        * ส่วนลดยังไม่ถูกคำนวณในระบบจองออนไลน์ กรุณาสอบถามเงื่อนไขที่ {property.phone} ก่อนชำระเงิน
+      </p>
+      <a
+        href={`tel:${property.phone.replace(/[^\d+]/g, "")}`}
+        className="bg-gold mt-6 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-ink shadow transition hover:brightness-110"
+      >
+        สอบถามโปรโมชั่น <Phone className="size-4" />
+      </a>
+    </>
+  );
+}
+
+async function ContactLinks() {
+  const { property: p } = await getSite();
+  return (
+    <>
+      {p.phone && (
+        <a href={`tel:${p.phone.replace(/[^\d+]/g, "")}`} className="flex items-center gap-3 hover:text-gold-300">
+          <Phone className="size-4 shrink-0" /> {p.phone}
+        </a>
+      )}
+      {p.facebook_url && (
+        <a href={p.facebook_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gold-300">
+          <svg viewBox="0 0 24 24" className="size-4 shrink-0 fill-current" aria-hidden>
+            <path d={social.facebook} />
+          </svg>
+          {p.name_en ? `${p.name_en} ${p.name_th}` : p.name_th}
+        </a>
+      )}
+      {p.address && (
+        <a href={MAP_URL} target="_blank" rel="noopener noreferrer" className="flex gap-3 hover:text-gold-300">
+          <MapPin className="mt-0.5 size-4 shrink-0" />
+          {p.address}
+        </a>
+      )}
+    </>
+  );
+}
+
+async function SocialLinks() {
+  const { property: p } = await getSite();
+  // แสดงเฉพาะช่องทางที่ตั้งค่าไว้จริงในหลังบ้าน
+  const links = [
+    p.facebook_url && { key: "facebook" as const, href: p.facebook_url },
+    p.line_url && { key: "line" as const, href: p.line_url },
+  ].filter(Boolean) as { key: keyof typeof social; href: string }[];
+  return links.map(({ key: k, href }) => (
+    <a key={k} href={href} target="_blank" rel="noopener noreferrer" aria-label={k}
+      className="grid size-9 place-items-center rounded-full bg-white text-teal-deep transition hover:bg-gold-300">
+      <svg viewBox="0 0 24 24" className="size-5 fill-current" aria-hidden>
+        <path d={social[k]} />
+      </svg>
+    </a>
+  ));
+}
+
+async function GalleryLink() {
+  const { property: p } = await getSite();
+  return p.facebook_url ? <OutlineLink href={p.facebook_url}>ดูภาพทั้งหมด</OutlineLink> : null;
+}
 
 const nav = [
   { href: "#", label: "หน้าแรก" },
@@ -42,14 +120,6 @@ const highlights = [
   { Icon: Wifi, title: "Wi-Fi ฟรี", text: "ทั่วบริเวณรีสอร์ท" },
   { Icon: Car, title: "ที่จอดรถ", text: "สะดวก ปลอดภัย" },
 ];
-
-const rooms: Room[] = ROOM_TYPES.map((r) => ({
-  name: r.name,
-  image: r.image,
-  guests: `${r.capacity} คน`,
-  beds: r.beds,
-  price: formatBaht(r.price),
-}));
 
 const promos = [
   { image: "/images/promo-1.jpg", title: "Early Bird", sub: "จองล่วงหน้า", value: "15%" },
@@ -96,8 +166,6 @@ const social = {
   youtube:
     "M23.5 6.5a3 3 0 0 0-2.1-2.1C19.5 4 12 4 12 4s-7.5 0-9.4.4A3 3 0 0 0 .5 6.5 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.5 3 3 0 0 0 2.1 2.1c1.9.4 9.4.4 9.4.4s7.5 0 9.4-.4a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.5ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z",
 };
-
-const SOCIAL_LINKS: { key: keyof typeof social; href: string }[] = [{ key: "facebook", href: FACEBOOK_URL }];
 
 export default function Home() {
   return (
@@ -192,7 +260,9 @@ export default function Home() {
           </div>
           <OutlineLink href="/booking">ดูห้องว่างและราคา</OutlineLink>
         </div>
-        <RoomsCarousel rooms={rooms} />
+        <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-white/70" />}>
+          <Rooms />
+        </Suspense>
       </section>
 
       {/* ===== Promotions ===== */}
@@ -202,15 +272,9 @@ export default function Home() {
             <Eyebrow light>SPECIAL OFFER</Eyebrow>
             <h2 className="mt-1 text-3xl font-bold sm:text-4xl">โปรโมชั่นพิเศษ</h2>
             <p className="mt-2 text-white/80">จองตรงกับรีสอร์ท รับสิทธิ์พิเศษมากมาย</p>
-            <p className="mt-2 text-xs text-white/70">
-              * ส่วนลดยังไม่ถูกคำนวณในระบบจองออนไลน์ กรุณาสอบถามเงื่อนไขที่ {PHONE} ก่อนชำระเงิน
-            </p>
-            <a
-              href={`tel:${PHONE.replaceAll("-", "")}`}
-              className="bg-gold mt-6 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-ink shadow transition hover:brightness-110"
-            >
-              สอบถามโปรโมชั่น <Phone className="size-4" />
-            </a>
+            <Suspense>
+              <PromoCall />
+            </Suspense>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             {promos.map((p) => (
@@ -257,7 +321,9 @@ export default function Home() {
           <h2 className="mt-1 text-2xl font-bold">แกลเลอรี</h2>
           <p className="mt-2 text-sm text-ink/70">บรรยากาศรีสอร์ทที่จะทำให้คุณอยากมาสัมผัสด้วยตัวเอง</p>
           <div className="mt-4">
-            <OutlineLink href={FACEBOOK_URL}>ดูภาพทั้งหมด</OutlineLink>
+            <Suspense>
+              <GalleryLink />
+            </Suspense>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -306,19 +372,9 @@ export default function Home() {
 
           <div className="space-y-3 text-sm lg:pl-8">
             <p className="font-semibold text-white">ติดต่อเรา</p>
-            <a href={`tel:${PHONE.replaceAll("-", "")}`} className="flex items-center gap-3 hover:text-gold-300">
-              <Phone className="size-4 shrink-0" /> {PHONE}
-            </a>
-            <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gold-300">
-              <svg viewBox="0 0 24 24" className="size-4 shrink-0 fill-current" aria-hidden>
-                <path d={social.facebook} />
-              </svg>
-              FahTalay Resort ฟ้าทะเลรีสอร์ท
-            </a>
-            <a href={MAP_URL} target="_blank" rel="noopener noreferrer" className="flex gap-3 hover:text-gold-300">
-              <MapPin className="mt-0.5 size-4 shrink-0" />
-              78/12 หมู่ 1 ถนนเลียบหาดแม่รำพึง ต.บ้านเพ อ.เมืองระยอง จ.ระยอง 21160
-            </a>
+            <Suspense>
+              <ContactLinks />
+            </Suspense>
           </div>
 
           <div className="text-sm lg:pl-8">
@@ -354,21 +410,9 @@ export default function Home() {
           <div className="text-sm lg:pl-8">
             <p className="font-semibold text-white">ติดตามเรา</p>
             <div className="mt-3 flex gap-3">
-              {/* แสดงเฉพาะช่องทางที่มีลิงก์จริง — เพิ่ม URL ของ LINE / Instagram / YouTube ใน SOCIAL_LINKS เมื่อได้รับจากรีสอร์ท */}
-              {SOCIAL_LINKS.map(({ key: k, href }) => (
-                <a
-                  key={k}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={k}
-                  className="grid size-9 place-items-center rounded-full bg-white text-teal-deep transition hover:bg-gold-300"
-                >
-                  <svg viewBox="0 0 24 24" className="size-5 fill-current" aria-hidden>
-                    <path d={social[k]} />
-                  </svg>
-                </a>
-              ))}
+              <Suspense>
+                <SocialLinks />
+              </Suspense>
             </div>
           </div>
         </div>

@@ -84,18 +84,26 @@ describe("double booking prevention", () => {
     await ledgerMatchesBookings(ctx.types["family-suite"]);
   });
 
-  it("the same physical room can never be assigned to overlapping stays", async () => {
+  it("the same physical room can never be assigned to overlapping stays (25 races)", async () => {
     const owner = await staff(ctx.tenantId, "owner");
-    const s = stay(3);
-    const a = await createBooking(ctx.tenantId, { propertyId: ctx.propertyId, ...s, rooms: [room(ctx.types["deluxe-sea-view"])], guest, source: "phone", confirmNow: true }, owner);
-    const b = await createBooking(ctx.tenantId, { propertyId: ctx.propertyId, checkIn: addDays(s.checkIn, 1), checkOut: addDays(s.checkOut, 1), rooms: [room(ctx.types["deluxe-sea-view"])], guest, source: "phone", confirmNow: true }, owner);
     const roomId = (await admin().query("SELECT id FROM rooms WHERE room_type_id = $1 ORDER BY room_number LIMIT 1", [ctx.types["deluxe-sea-view"]])).rows[0].id;
-    const brA = (await getBooking(ctx.tenantId, a.code))!.rooms[0].id;
-    const brB = (await getBooking(ctx.tenantId, b.code))!.rooms[0].id;
-    const both = await Promise.allSettled([assignRoom(ctx.tenantId, brA, roomId, owner), assignRoom(ctx.tenantId, brB, roomId, owner)]);
-    expect(both.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    const err = both.find((r): r is PromiseRejectedResult => r.status === "rejected")!.reason as DomainError;
-    expect(err.code).toBe("ROOM_TAKEN");
+    // a single race is flaky evidence: repeat it so lock-ordering bugs (deadlocks) show up reliably
+    for (let i = 0; i < 25; i++) {
+      const s = stay(3);
+      const a = await createBooking(ctx.tenantId, { propertyId: ctx.propertyId, ...s, rooms: [room(ctx.types["deluxe-sea-view"])], guest, source: "phone", confirmNow: true }, owner);
+      const b = await createBooking(ctx.tenantId, { propertyId: ctx.propertyId, checkIn: addDays(s.checkIn, 1), checkOut: addDays(s.checkOut, 1), rooms: [room(ctx.types["deluxe-sea-view"])], guest, source: "phone", confirmNow: true }, owner);
+      const brA = (await getBooking(ctx.tenantId, a.code))!.rooms[0].id;
+      const brB = (await getBooking(ctx.tenantId, b.code))!.rooms[0].id;
+      const both = await Promise.allSettled([assignRoom(ctx.tenantId, brA, roomId, owner), assignRoom(ctx.tenantId, brB, roomId, owner)]);
+      expect(both.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      const err = both.find((r): r is PromiseRejectedResult => r.status === "rejected")!.reason;
+      expect(err).toBeInstanceOf(DomainError);
+      expect((err as DomainError).code).toBe("ROOM_TAKEN");
+    }
+    const n = (await admin().query(
+      `SELECT count(*)::int AS n FROM room_assignments a JOIN room_assignments b
+         ON a.room_id = b.room_id AND a.id < b.id AND a.active AND b.active AND a.stay && b.stay`)).rows[0].n;
+    expect(n).toBe(0);
   });
 
   it("idempotency key: double-submitting the booking form creates one booking", async () => {

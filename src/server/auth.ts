@@ -40,6 +40,14 @@ export async function rateLimit(tx: Tx, key: string, limit: number, windowSecond
   return row!.count <= limit;
 }
 
+export function checkRateLimit(tenantId: string, key: string, limit: number, windowSeconds: number) {
+  return withTenant(tenantId, (tx) => rateLimit(tx, key, limit, windowSeconds));
+}
+
+export function clearRateLimit(tenantId: string, key: string) {
+  return withTenant(tenantId, (tx) => tx.query("DELETE FROM rate_limits WHERE key = $1", [key]));
+}
+
 // --------------------------------------------------------------------- login --
 export type StaffSession = { userId: string; tenantId: string; role: Role; name: string; email: string; isPlatformAdmin: boolean };
 

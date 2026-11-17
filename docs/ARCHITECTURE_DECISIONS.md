@@ -73,6 +73,20 @@
 - test suite เปิด PostgreSQL แยกชั่วคราวทุกครั้ง ไม่แตะข้อมูลพัฒนา
 - production ใช้ PostgreSQL ที่จัดการโดยผู้ให้บริการ (เช่น Neon / Supabase / RDS) ผ่าน `DATABASE_URL` — โค้ดเหมือนกันทุกประการ
 
+## ADR-0009 · ระบุโรงแรมจาก Host ในฝั่งเซิร์ฟเวอร์ (ไม่ใช้ proxy.ts ส่ง header)
+**สถานะ:** Accepted · 2026-11-17 · **เปลี่ยนจาก** Phase 0 §10.1
+
+- `getTenant()` อ่าน `Host` แล้วค้น `tenant_domains` ทุก request (แคช 60 วินาที) แทนการให้ `proxy.ts` ตั้ง header `x-tenant-id`
+- เหตุผล: ไม่มี header ที่ client ปลอมได้เลย และ Next.js 16 แนะนำให้ตรวจสิทธิ์ในทุก page/action อยู่แล้ว (proxy อาจไม่ครอบคลุม Server Action ถ้า matcher เปลี่ยน)
+- `x-forwarded-host` ใช้ได้เฉพาะเมื่อตั้ง `TRUST_PROXY_HOST=1` (หลัง reverse proxy ที่เชื่อถือได้เท่านั้น)
+
+## ADR-0010 · ล็อกห้องจริงก่อนจัดห้อง
+**สถานะ:** Accepted · 2026-11-17
+
+- พบจาก test ที่ล้มเป็นครั้งคราว: การจัดห้องเดียวกันพร้อมกัน PostgreSQL บางครั้งตัดสินความขัดแย้งของ exclusion constraint เป็น **deadlock** (ข้อมูลยังถูกต้อง ไม่มีห้องซ้อน แต่ผู้ใช้เห็น "ระบบขัดข้อง" แทน "ห้องไม่ว่าง")
+- แก้: `SELECT … FROM rooms WHERE id = $1 FOR UPDATE` ก่อน insert ทำให้คำขอเข้าคิวตามลำดับ
+- test ทำซ้ำการแข่งกัน 25 รอบ · mutation test: เอาล็อกออก → `deadlock detected` ทันที
+
 ## ADR-0008 · ลำดับงานของ Addendum
 **สถานะ:** Accepted · 2026-11-17 · อ้างอิง Addendum Part 15
 

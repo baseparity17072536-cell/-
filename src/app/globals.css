@@ -5,26 +5,29 @@
   --font-display: var(--font-cinzel);
   --font-script: var(--font-great-vibes);
 
-  --color-cream: #fbf6ee;
-  --color-cream-200: #f3e9d8;
-  --color-gold-300: #e8cf93;
-  --color-gold-400: #d9b46a;
-  --color-gold-500: #c49a4c;
-  --color-gold-600: #a67b32;
-  --color-teal-deep: #0c3f4d;
-  --color-teal-mid: #145a69;
-  --color-ink: #1d2b33;
+  /* Luxury Coastal theme: Deep Sea #123C46 · Champagne Gold #C4A46B · Ivory #F3EFE6 · Sea Mist #78928A */
+  --color-cream: #f7f4ed;
+  --color-ivory: #f3efe6;
+  --color-cream-200: #e9e2d3;
+  --color-gold-300: #e2cfa4;
+  --color-gold-400: #d3ba86;
+  --color-gold-500: #c4a46b;
+  --color-gold-600: #a2834a;
+  --color-teal-deep: #123c46;
+  --color-teal-mid: #1d5563;
+  --color-sea-mist: #78928a;
+  --color-ink: #1b2a30;
 }
 
 @utility text-gold {
-  background-image: linear-gradient(180deg, #f5dfa6 0%, #d9b46a 45%, #a67b32 100%);
+  background-image: linear-gradient(180deg, #f1e3c2 0%, #d3ba86 45%, #a2834a 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 @utility bg-gold {
-  background-image: linear-gradient(180deg, #e3c27c 0%, #c49a4c 100%);
+  background-image: linear-gradient(180deg, #d6bc86 0%, #c4a46b 55%, #b0904f 100%);
 }
 
 @utility no-scrollbar {

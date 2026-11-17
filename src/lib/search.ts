@@ -1,10 +1,10 @@
-import { RESORT } from "./rooms";
 import { isIsoDate, nightsBetween, todayInBangkok } from "./dates";
 
 export type StaySearch = {
   checkIn: string;
   checkOut: string;
-  guests: number;
+  guests: number; // adults
+  children: number;
   rooms: number;
   nights: number;
 };
@@ -23,13 +23,16 @@ function int(v: string | undefined, min: number, max: number, fallback: number) 
 /** ตรวจสอบช่วงวันเข้าพัก คืนค่า error เป็นข้อความภาษาไทย หรือ search ที่ผ่านการตรวจแล้ว */
 export function parseStay(
   raw: Raw,
-  today = todayInBangkok(),
+  opts: { today?: string; maxNights?: number } = {},
 ): { ok: true; search: StaySearch } | { ok: false; error: string | null; partial: Partial<StaySearch> } {
+  const today = opts.today ?? todayInBangkok();
+  const maxNights = opts.maxNights ?? 30;
   const checkIn = one(raw.checkin);
   const checkOut = one(raw.checkout);
-  const guests = int(one(raw.guests), 1, 30, 2);
+  const guests = int(one(raw.guests), 1, 40, 2);
+  const children = int(one(raw.children), 0, 20, 0);
   const rooms = int(one(raw.rooms), 1, 10, 1);
-  const partial = { checkIn, checkOut, guests, rooms };
+  const partial = { checkIn, checkOut, guests, children, rooms };
 
   if (!checkIn && !checkOut) return { ok: false, error: null, partial };
   if (!isIsoDate(checkIn) || !isIsoDate(checkOut))
@@ -37,17 +40,21 @@ export function parseStay(
   if (checkIn < today) return { ok: false, error: "วันเช็คอินต้องไม่เป็นวันที่ผ่านมาแล้ว", partial };
   const nights = nightsBetween(checkIn, checkOut);
   if (nights < 1) return { ok: false, error: "วันเช็คเอาท์ต้องอยู่หลังวันเช็คอิน", partial };
-  if (nights > RESORT.maxNights)
-    return { ok: false, error: `จองได้สูงสุด ${RESORT.maxNights} คืนต่อการจอง`, partial };
+  if (nights > maxNights) return { ok: false, error: `จองได้สูงสุด ${maxNights} คืนต่อการจอง`, partial };
+  if (guests < rooms) return { ok: false, error: "ต้องมีผู้ใหญ่อย่างน้อย 1 ท่านต่อห้อง", partial };
 
-  return { ok: true, search: { checkIn, checkOut, guests, rooms, nights } };
+  return { ok: true, search: { checkIn, checkOut, guests, children, rooms, nights } };
 }
 
-export function stayQuery(s: Pick<StaySearch, "checkIn" | "checkOut" | "guests" | "rooms">, extra: Record<string, string> = {}) {
+export function stayQuery(
+  s: Pick<StaySearch, "checkIn" | "checkOut" | "guests" | "rooms"> & { children?: number },
+  extra: Record<string, string> = {},
+) {
   return new URLSearchParams({
     checkin: s.checkIn,
     checkout: s.checkOut,
     guests: String(s.guests),
+    children: String(s.children ?? 0),
     rooms: String(s.rooms),
     ...extra,
   }).toString();

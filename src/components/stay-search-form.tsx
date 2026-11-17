@@ -2,10 +2,10 @@
 
 import Form from "next/form";
 import { useState, useSyncExternalStore } from "react";
-import { BedDouble, CalendarDays, ChevronDown, Search, User } from "lucide-react";
+import { Baby, BedDouble, CalendarDays, ChevronDown, Search, User } from "lucide-react";
 
 type Props = {
-  defaults?: { checkIn?: string; checkOut?: string; guests?: number; rooms?: number };
+  defaults?: { checkIn?: string; checkOut?: string; guests?: number; children?: number; rooms?: number };
   title?: string;
 };
 
@@ -34,8 +34,8 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
 
   return (
     <div className="rounded-2xl bg-white/95 p-4 shadow-[0_20px_50px_-20px_rgba(12,63,77,0.45)] backdrop-blur sm:p-5">
-      <Form action="/booking" className="grid items-center gap-3 lg:grid-cols-[auto_1fr_1fr_1fr_1fr_auto]">
-        <h2 className="px-2 text-2xl font-bold text-ink lg:pr-4">{title}</h2>
+      <Form action="/booking" className="grid items-center gap-3 sm:grid-cols-2 lg:grid-cols-[auto_1fr_1fr_1fr_0.8fr_0.8fr_auto]">
+        <h2 className="px-2 text-2xl font-bold text-ink sm:col-span-2 lg:col-span-1 lg:pr-4">{title}</h2>
 
         <label className={cell}>
           <CalendarDays className="size-5 shrink-0 text-ink/70" />
@@ -81,6 +81,21 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
               {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
                   {n} ผู้ใหญ่
+                </option>
+              ))}
+            </select>
+          </span>
+          <ChevronDown className="pointer-events-none size-4 text-ink/60" />
+        </label>
+
+        <label className={cell}>
+          <Baby className="size-5 shrink-0 text-ink/70" />
+          <span className="flex-1">
+            <span className={label}>เด็ก</span>
+            <select name="children" defaultValue={String(defaults.children ?? 0)} className={`${input} appearance-none`}>
+              {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                <option key={n} value={n}>
+                  {n} คน
                 </option>
               ))}
             </select>

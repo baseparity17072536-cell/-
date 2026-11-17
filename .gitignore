@@ -46,3 +46,8 @@ next-env.d.ts
 # local postgres data (scripts/db.ts)
 /.pgdata
 /.pgtest
+
+# test artifacts (contain session cookies) and uploaded files
+/test-results
+/playwright-report
+/storage

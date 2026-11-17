@@ -10,22 +10,23 @@
 | โมดูล | Backend + DB | UI | Test |
 |---|---|---|---|
 | Multi-tenant foundation (RLS, composite FK, app role) | ✅ | — | ✅ isolation |
-| Auth: login/logout, session, lockout, rate limit, password reset | ✅ | ⬜ | ✅ |
-| User management + RBAC 4 บทบาท | ✅ | ⬜ | ✅ |
-| ผู้อนุมัติ (maker-checker) | ✅ | ⬜ | ✅ |
-| Property settings (+ ภาษี/ค่าบริการ) | ✅ | ⬜ | 🟡 |
-| Room types (code, วิว, เตียง, อาคาร, วิดีโอ, สิ่งอำนวยความสะดวก) | ✅ | ⬜ | ✅ |
-| Physical rooms + bulk create (A101–A110) + housekeeping status + ประวัติห้อง | ✅ | ⬜ | ✅ |
-| Room images | ✅ | ⬜ | ⬜ |
-| Rate plans (แพ็กเกจ เช่น รวมอาหารเช้า) | ✅ | ⬜ | 🟡 |
-| Price rules (วันธรรมดา/ศุกร์/เสาร์/ฤดูกาล/เทศกาล) + ลำดับความสำคัญ | ✅ | ⬜ | ✅ |
-| Daily rate calendar (หลายวัน, ช่วงวัน, เลือกวันในสัปดาห์, ปิดขาย, พักขั้นต่ำ) | ✅ | ⬜ | ✅ |
-| Availability / inventory รายวัน (ทั้งหมด/จอง/hold/ซ่อม/ขายได้) | ✅ | ⬜ | ✅ |
-| Booking engine: hold, หมดอายุ, กันจองซ้ำ, idempotency, สถานะ 8 แบบ | ✅ | ⬜ | ✅ concurrency |
-| Walk-in / Phone booking (จองแทนลูกค้า) | ✅ | ⬜ | ✅ |
-| Room assignment, check-in/out | ✅ | ⬜ | ✅ |
-| Audit log (พร้อมค่าก่อน/หลังของราคา) | ✅ | ⬜ | ✅ |
-| หน้าเว็บลูกค้าย้ายมาใช้ฐานข้อมูล | ⬜ | ⬜ | ⬜ |
+| Auth: login/logout, session, lockout, rate limit, password reset | ✅ | ✅ | ✅ + E2E |
+| User management + RBAC 4 บทบาท | ✅ | ✅ | ✅ |
+| ผู้อนุมัติ (maker-checker) | ✅ | ✅ | ✅ |
+| Property settings (+ ภาษี/ค่าบริการ) | ✅ | ✅ | ✅ |
+| Room types (code, วิว, เตียง, อาคาร, วิดีโอ, สิ่งอำนวยความสะดวก) | ✅ | ✅ | ✅ |
+| Physical rooms + bulk create (A101–A110) + housekeeping status + ประวัติห้อง | ✅ | ✅ | ✅ |
+| Room images (อัปโหลด ตรวจ magic bytes จัดลำดับ ลบ) | ✅ | ✅ | 🟡 ยังไม่มี test อัตโนมัติ |
+| Rate plans (แพ็กเกจ เช่น รวมอาหารเช้า) | ✅ | ✅ | ✅ |
+| Price rules (วันธรรมดา/ศุกร์/เสาร์/ฤดูกาล/เทศกาล) + ลำดับความสำคัญ | ✅ | ✅ | ✅ |
+| Daily rate calendar (หลายวัน, ช่วงวัน, เลือกวันในสัปดาห์, ปิดขาย, พักขั้นต่ำ) | ✅ | ✅ | ✅ + E2E |
+| Availability / inventory รายวัน (ทั้งหมด/จอง/hold/ซ่อม/ขายได้) | ✅ | ✅ | ✅ |
+| Booking engine: hold, หมดอายุ, กันจองซ้ำ, idempotency, สถานะ 8 แบบ | ✅ | ✅ | ✅ concurrency + E2E |
+| Walk-in / Phone booking (จองแทนลูกค้า) | ✅ | ✅ | ✅ + E2E |
+| Room assignment, check-in/out | ✅ | ✅ | ✅ + E2E |
+| Audit log (พร้อมค่าก่อน/หลังของราคา) | ✅ | ✅ | ✅ |
+| หน้าเว็บลูกค้าย้ายมาใช้ฐานข้อมูล | ✅ | ✅ | ✅ E2E |
+| รองรับมือถือ (เว็บลูกค้า + หลังบ้าน) | — | ✅ | ✅ E2E mobile |
 | Outbox แจ้งเตือน (คิวเท่านั้น ส่งจริง Phase 6) | ✅ | — | — |
 
 ## Phase 2 — Payment ⬜

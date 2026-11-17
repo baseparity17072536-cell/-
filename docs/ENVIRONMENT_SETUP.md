@@ -24,7 +24,8 @@ npm run dev
 | `npm run db:migrate` | รัน migration ที่ยังไม่รัน |
 | `npm run db:rollback` | ย้อน migration ล่าสุด 1 ขั้น |
 | `npm run db:seed` | ใส่ข้อมูลเริ่มต้น (ข้ามถ้ามีแล้ว) และนำเข้า `data/bookings.json` เดิม |
-| `npm test` | เปิด PostgreSQL ชั่วคราวแยก แล้วรัน unit + integration test ทั้งหมด |
+| `npm test` | เปิด PostgreSQL ชั่วคราวแยก (พอร์ตว่างอัตโนมัติ) แล้วรัน unit + integration test ทั้งหมด |
+| `npm run test:e2e` | ทดสอบผ่านเบราว์เซอร์จริง (desktop + mobile) ต้องเปิด `db:start` ไว้ และตั้ง `E2E_OWNER_PASSWORD` · ติดตั้งเบราว์เซอร์ครั้งแรก: `npx playwright install chromium` |
 | `npm run typecheck` / `npm run lint` | ตรวจ TypeScript / ESLint |
 
 ## ตัวแปรสภาพแวดล้อม
@@ -33,8 +34,9 @@ npm run dev
 |---|---|
 | `DATABASE_URL` | การเชื่อมต่อของแอป — **ต้องเป็น role ที่ไม่ใช่ superuser และไม่มี BYPASSRLS** (`fahtalay_app`) |
 | `DATABASE_ADMIN_URL` | ใช้เฉพาะ migration/seed (เจ้าของตาราง) ห้ามให้แอปใช้ |
-| `APP_SECRET` | สำหรับเซ็นข้อมูลฝั่งเซิร์ฟเวอร์ |
-| `ADMIN_PASSWORD` | ของระบบต้นแบบเดิม (เลิกใช้เมื่อหลังบ้านใหม่เสร็จ) |
+| `APP_SECRET` | **จำเป็น** อย่างน้อย 32 ตัวอักษร ใช้เซ็นสิทธิ์ดูข้อมูลการจองของลูกค้า (สร้างให้อัตโนมัติใน dev) |
+| `TRUST_PROXY_HOST` | ตั้งเป็น `1` เฉพาะเมื่ออยู่หลัง reverse proxy ที่เชื่อถือได้ (ให้ใช้ `x-forwarded-host`) |
+| `ADMIN_PASSWORD` | ไม่ใช้แล้ว (ระบบเดิม) ลบออกจาก `.env.local` ได้ |
 | `SEED_OWNER_EMAIL` | อีเมลบัญชีเจ้าของตอน seed (ไม่ใส่ = `owner@fahtalay.local`) |
 
 ไฟล์ `.env*`, `.pgdata/`, `data/` อยู่ใน `.gitignore` ห้าม commit

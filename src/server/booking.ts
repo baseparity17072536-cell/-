@@ -526,9 +526,11 @@ export async function assignRoom(tenantId: string, bookingRoomId: string, roomId
 
     await tx.query("UPDATE room_assignments SET active = false WHERE booking_room_id = $1 AND active", [bookingRoomId]);
     if (roomId) {
+      // Lock the physical room first: concurrent assignments of the same room queue here, so the
+      // exclusion constraint reports a clean conflict instead of PostgreSQL resolving a deadlock.
       const room = await one<{ room_type_id: string; status: string; room_number: string }>(
         tx,
-        "SELECT room_type_id, status, room_number FROM rooms WHERE id = $1",
+        "SELECT room_type_id, status, room_number FROM rooms WHERE id = $1 FOR UPDATE",
         [roomId],
       );
       if (!room) throw new DomainError("NOT_FOUND", "ไม่พบห้องนี้");
@@ -554,6 +556,25 @@ export async function assignRoom(tenantId: string, bookingRoomId: string, roomId
   });
 }
 
+/** Physical rooms of the booked type, with whether each is free for the stay (for the assign dropdown). */
+export async function assignableRooms(tenantId: string, bookingRoomId: string) {
+  return withTenant(tenantId, (tx) =>
+    many<{ id: string; room_number: string; housekeeping_status: string; free: boolean }>(
+      tx,
+      `SELECT r.id, r.room_number, r.housekeeping_status,
+              NOT EXISTS (
+                SELECT 1 FROM room_assignments ra
+                WHERE ra.room_id = r.id AND ra.active AND ra.booking_room_id <> br.id
+                  AND ra.stay && daterange(b.check_in, b.check_out, '[)')
+              ) AS free
+       FROM booking_rooms br JOIN bookings b ON b.id = br.booking_id
+       JOIN rooms r ON r.room_type_id = br.room_type_id AND r.status = 'active'
+       WHERE br.id = $1 ORDER BY r.room_number`,
+      [bookingRoomId],
+    ),
+  );
+}
+
 // ------------------------------------------------------------------ queries --
 export type BookingDetail = Awaited<ReturnType<typeof getBooking>>;
 
@@ -565,9 +586,11 @@ export async function getBooking(tenantId: string, code: string) {
       special_request: string | null; internal_note: string | null; hold_expires_at: Date | null; cancelled_by: string | null;
       cancel_reason: string | null; version: number; created_at: Date; property_id: string;
       guest_name: string; guest_phone: string; guest_email: string | null;
+      tax_inclusive: boolean; service_charge_satang: number; vat_satang: number;
     }>(
       tx,
       `SELECT b.id, b.code, b.status, b.source, b.check_in, b.check_out, b.adults, b.children, b.subtotal_satang,
+              b.tax_inclusive, b.service_charge_satang, b.vat_satang,
               b.discount_satang, b.total_satang, b.special_request, b.internal_note, b.hold_expires_at, b.cancelled_by,
               b.cancel_reason, b.version, b.created_at, b.property_id,
               g.full_name AS guest_name, g.phone AS guest_phone, g.email AS guest_email

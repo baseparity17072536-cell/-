@@ -1,16 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Loader2, Printer } from "lucide-react";
-import {
-  adminLoginAction,
-  adminSetStatusAction,
-  cancelBookingAction,
-  createBookingAction,
-  lookupBookingAction,
-  type FormState,
-} from "@/app/actions";
-import { RESORT } from "@/lib/rooms";
+import { cancelBookingAction, createBookingAction, lookupBookingAction, type FormState } from "@/app/actions";
 
 const field =
   "mt-1 w-full rounded-lg border border-cream-200 bg-cream px-4 py-3 outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-300/40";
@@ -39,10 +31,13 @@ function Spinner({ show }: { show: boolean }) {
 }
 
 // ----- ขั้นตอนที่ 2: ข้อมูลผู้เข้าพัก -----
-export function GuestForm({ hidden }: { hidden: Record<string, string> }) {
+export function GuestForm({ hidden, holdHours }: { hidden: Record<string, string>; holdHours: number }) {
   const [state, action, pending] = useActionState(createBookingAction, null);
+  // one key per form: double clicks / resubmits create a single booking
+  const [idem] = useState(() => crypto.randomUUID());
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
+      <input type="hidden" name="idempotency_key" value={idem} />
       {Object.entries(hidden).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}
@@ -69,7 +64,7 @@ export function GuestForm({ hidden }: { hidden: Record<string, string> }) {
           <a href="/booking/policy" target="_blank" className="font-semibold text-gold-600 underline">
             เงื่อนไขการจอง
           </a>
-          : ระบบจะกันห้องไว้ {RESORT.holdHours} ชั่วโมงเพื่อรอการชำระเงิน
+          : ระบบจะกันห้องไว้ {holdHours} ชั่วโมงเพื่อรอการชำระเงิน
           หากไม่ได้ชำระภายในเวลาที่กำหนด การจองจะหมดอายุอัตโนมัติ
         </span>
       </label>
@@ -148,50 +143,3 @@ export function PrintButton() {
   );
 }
 
-// ----- แอดมิน -----
-export function AdminLoginForm() {
-  const [state, action, pending] = useActionState(adminLoginAction, null);
-  return (
-    <form action={action} className="space-y-4">
-      <label className="block text-sm font-medium">
-        รหัสผ่านผู้ดูแล
-        <input name="password" type="password" required autoComplete="current-password" className={field} />
-      </label>
-      <Message state={state} />
-      <button type="submit" disabled={pending} className={`${goldBtn} w-full`}>
-        <Spinner show={pending} /> เข้าสู่ระบบ
-      </button>
-    </form>
-  );
-}
-
-export function AdminStatusButtons({ code, status, expired }: { code: string; status: string; expired: boolean }) {
-  const [state, action, pending] = useActionState(adminSetStatusAction, null);
-  const btn = "rounded-full px-3 py-1 text-xs font-semibold transition disabled:opacity-50";
-  return (
-    <form action={action} className="flex flex-col items-end gap-1">
-      <input type="hidden" name="code" value={code} />
-      <div className="flex flex-wrap justify-end gap-2">
-        {status === "pending" && (
-          <button name="status" value="confirmed" disabled={pending} className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700`}>
-            {expired ? "ยืนยัน (หมดเวลาแล้ว)" : "ยืนยันชำระเงิน"}
-          </button>
-        )}
-        {status !== "cancelled" && (
-          <button
-            name="status"
-            value="cancelled"
-            disabled={pending}
-            onClick={(e) => {
-              if (!confirm(`ยกเลิกการจอง ${code}?`)) e.preventDefault();
-            }}
-            className={`${btn} border border-red-600 text-red-700 hover:bg-red-50`}
-          >
-            ยกเลิก
-          </button>
-        )}
-      </div>
-      {state?.error && <p className="text-xs text-red-700">{state.error}</p>}
-    </form>
-  );
-}

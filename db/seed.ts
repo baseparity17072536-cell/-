@@ -1,4 +1,4 @@
-// Seed the FahTalay tenant from the prototype data (src/lib/rooms.ts) and import data/bookings.json.
+﻿// Seed the FahTalay tenant from the prototype data (src/lib/rooms.ts) and import data/bookings.json.
 // Idempotent: does nothing if the tenant already exists. Runs with the admin connection.
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { hash } from "@node-rs/argon2";
 import pg from "pg";
-import { RESORT, ROOM_TYPES } from "../src/lib/rooms";
+import { RESORT, ROOM_TYPES } from "./seed-data/fahtalay";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -23,7 +23,7 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
   try {
     const exists = await c.query("SELECT id FROM tenants WHERE slug = 'fahtalay'");
     if (exists.rowCount) {
-      console.log("tenant 'fahtalay' already exists — seed skipped");
+      console.log("tenant 'fahtalay' already exists โ€” seed skipped");
       return { tenantId: exists.rows[0].id as string, created: false };
     }
     await c.query("BEGIN");
@@ -45,7 +45,7 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
     const planId: string = (
       await c.query(
         `INSERT INTO rate_plans (tenant_id, property_id, code, name_th, name_en, description_th, is_default)
-         VALUES ($1, $2, 'ROOM_ONLY', 'ราคาห้องพัก', 'Room only', 'ราคาห้องพักไม่รวมอาหาร', true) RETURNING id`,
+         VALUES ($1, $2, 'ROOM_ONLY', 'เธฃเธฒเธเธฒเธซเนเธญเธเธเธฑเธ', 'Room only', 'เธฃเธฒเธเธฒเธซเนเธญเธเธเธฑเธเนเธกเนเธฃเธงเธกเธญเธฒเธซเธฒเธฃ', true) RETURNING id`,
         [tenantId, propertyId],
       )
     ).rows[0].id;
@@ -72,7 +72,7 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
     const ownerEmail = (opts.ownerEmail ?? process.env.SEED_OWNER_EMAIL ?? "owner@fahtalay.local").toLowerCase();
     const ownerPassword = opts.ownerPassword ?? `Ft-${randomBytes(9).toString("base64url")}1`;
     const ownerId: string = (
-      await c.query("INSERT INTO users (email, name, password_hash) VALUES ($1, 'เจ้าของรีสอร์ท', $2) RETURNING id", [
+      await c.query("INSERT INTO users (email, name, password_hash) VALUES ($1, 'เน€เธเนเธฒเธเธญเธเธฃเธตเธชเธญเธฃเนเธ—', $2) RETURNING id", [
         ownerEmail, await hash(ownerPassword, { memoryCost: 19456, timeCost: 2, parallelism: 1 }),
       ])
     ).rows[0].id;
@@ -105,7 +105,7 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
           const brId: string = (
             await c.query(
               `INSERT INTO booking_rooms (tenant_id, booking_id, room_type_id, rate_plan_id, room_type_name, rate_plan_name, adults, amount_satang)
-               VALUES ($1,$2,$3,$4,$5,'ราคาห้องพัก',$6,$7) RETURNING id`,
+               VALUES ($1,$2,$3,$4,$5,'เธฃเธฒเธเธฒเธซเนเธญเธเธเธฑเธ',$6,$7) RETURNING id`,
               [tenantId, bookingId, typeId, planId, b.roomName, Math.max(1, Math.ceil(b.guests / b.rooms)), b.pricePerNight * b.nights * 100],
             )
           ).rows[0].id;
@@ -138,7 +138,7 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
     await c.query("COMMIT");
     console.log(`seeded tenant fahtalay (${ROOM_TYPES.length} room types, ${[...ROOM_TYPES].reduce((s, t) => s + t.inventory, 0)} rooms, ${imported} imported bookings)`);
     if (!opts.ownerPassword) {
-      console.log("\n  Owner login (shown once — change it after first login):");
+      console.log("\n  Owner login (shown once โ€” change it after first login):");
       console.log(`    email:    ${ownerEmail}`);
       console.log(`    password: ${ownerPassword}\n`);
     }

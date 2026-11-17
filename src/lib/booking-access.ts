@@ -3,14 +3,14 @@ import { cookies } from "next/headers";
 
 // สิทธิ์ดูข้อมูลส่วนบุคคลในหน้า /booking/[code]
 // ได้รับเมื่อสร้างการจอง หรือยืนยันรหัสการจอง + เบอร์โทรในหน้า lookup แล้วเท่านั้น
-// (ชั่วคราวจนกว่าจะมี guest token ในฐานข้อมูลตาม Phase 0 หัวข้อ 10.6)
+// ลงลายเซ็นด้วย APP_SECRET (HMAC) — ไม่ต้องเก็บใน DB และปลอมไม่ได้
 
 const COOKIE = "ft_access";
 const MAX_CODES = 10;
 
 function secret() {
-  const base = process.env.BOOKING_ACCESS_SECRET ?? process.env.ADMIN_PASSWORD;
-  if (!base) throw new Error("ยังไม่ได้ตั้งค่า BOOKING_ACCESS_SECRET หรือ ADMIN_PASSWORD ในไฟล์ .env.local");
+  const base = process.env.APP_SECRET;
+  if (!base || base.length < 32) throw new Error("APP_SECRET is missing or shorter than 32 characters (see docs/ENVIRONMENT_SETUP.md)");
   return base;
 }
 

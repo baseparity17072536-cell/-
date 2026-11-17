@@ -43,10 +43,10 @@ export async function listChangeRequests(tenantId: string, status: "pending" | "
   return withTenant(tenantId, (tx) =>
     many<{
       id: string; kind: string; entity_id: string | null; summary: string; status: string; created_at: Date;
-      requested_by_name: string; reviewed_by_name: string | null; reviewed_at: Date | null; review_note: string | null; apply_error: string | null;
+      requested_by: string; requested_by_name: string; reviewed_by_name: string | null; reviewed_at: Date | null; review_note: string | null; apply_error: string | null;
     }>(
       tx,
-      `SELECT c.id, c.kind, c.entity_id, c.summary, c.status, c.created_at, c.reviewed_at, c.review_note, c.apply_error,
+      `SELECT c.id, c.kind, c.entity_id, c.summary, c.status, c.created_at, c.reviewed_at, c.review_note, c.apply_error, c.requested_by,
               u.name AS requested_by_name, r.name AS reviewed_by_name
        FROM change_requests c JOIN users u ON u.id = c.requested_by LEFT JOIN users r ON r.id = c.reviewed_by
        ${status === "pending" ? "WHERE c.status = 'pending'" : ""}

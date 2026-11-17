@@ -9,7 +9,18 @@ import type { TestProject } from "vitest/node";
 import { createDatabaseIfMissing, ensureAppLogin, migrateDown, migrateUp, urlFor } from "../../db/tooling";
 import { runSeed } from "../../db/seed";
 
-const PORT = 54339;
+/** Ask the OS for a free port so a stale socket from an earlier run can never block the suite. */
+async function freePort() {
+  const net = await import("node:net");
+  return new Promise<number>((resolve, reject) => {
+    const srv = net.createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const port = (srv.address() as import("node:net").AddressInfo).port;
+      srv.close(() => resolve(port));
+    });
+  });
+}
 
 declare module "vitest" {
   export interface ProvidedContext {
@@ -21,6 +32,7 @@ declare module "vitest" {
 
 export default async function setup(project: TestProject) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "fahtalay-pg-"));
+  const PORT = await freePort();
   const adminPw = randomBytes(12).toString("hex");
   const appPw = randomBytes(12).toString("hex");
   const server = new EmbeddedPostgres({
