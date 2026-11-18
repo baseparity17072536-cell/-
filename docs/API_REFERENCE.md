@@ -161,6 +161,7 @@
 | `DATABASE_POOL_MAX` | – | ขนาด connection pool (Vercel: 3) |
 | `DEFAULT_TENANT_SLUG` | – | โรงแรมสำหรับโดเมนที่ไม่ได้ลงทะเบียน (ติดตั้งโรงแรมเดียว) |
 | `BLOB_READ_WRITE_TOKEN` | production | ที่เก็บรูปห้อง (Vercel ตั้งให้เองเมื่อเชื่อม Blob store) · ไม่มี = เก็บในดิสก์ (dev) |
+| `MFA_REQUIRED_ROLES` | – | บทบาทที่ต้องใช้ MFA คั่นด้วย `,` (แนะนำ `owner`) · ไม่ตั้ง = ไม่บังคับใคร |
 | `TRUST_PROXY_HOST` | – | `1` = เชื่อ `x-forwarded-host` (ใช้เมื่ออยู่หลัง proxy ที่ควบคุมเองเท่านั้น) |
 | `DATABASE_ADMIN_URL` | เฉพาะ migrate/seed | **ห้ามใส่ใน Vercel** |
 

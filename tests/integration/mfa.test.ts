@@ -6,6 +6,8 @@ import { totpAt } from "@/server/totp";
 import { admin, closePools, fahtalay, ownerSession, useAppPool } from "../setup/helpers";
 
 process.env.APP_SECRET ??= "integration-test-secret-0123456789-abcdef";
+// these tests cover the enforced mode (production setting before go-live)
+process.env.MFA_REQUIRED_ROLES = "owner";
 
 let ctx: Awaited<ReturnType<typeof fahtalay>>;
 let seq = 0;
@@ -53,6 +55,19 @@ describe("MFA enrollment", () => {
     expect((await sessionOf(owner.email)).session).toMatchObject({ mfaEnabled: false, mfaRequired: true });
     const desk = await newUser("front_desk");
     expect((await sessionOf(desk.email)).session).toMatchObject({ mfaEnabled: false, mfaRequired: false });
+  });
+
+  it("with MFA_REQUIRED_ROLES unset nobody is forced, and MFA can still be turned on", async () => {
+    const owner = await newUser("owner");
+    process.env.MFA_REQUIRED_ROLES = "";
+    try {
+      expect((await sessionOf(owner.email)).session).toMatchObject({ mfaEnabled: false, mfaRequired: false });
+      const { session } = await enroll(owner.email);
+      expect(session).toMatchObject({ mfaEnabled: true, mfaRequired: false });
+      expect((await passwordLogin(owner.email)).ok).toBe("mfa"); // once on, it is always asked
+    } finally {
+      process.env.MFA_REQUIRED_ROLES = "owner";
+    }
   });
 
   it("shows the same pending secret until confirmed and stores it encrypted", async () => {

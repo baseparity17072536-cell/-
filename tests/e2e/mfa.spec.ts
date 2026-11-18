@@ -58,6 +58,7 @@ async function logout(page: Page) {
 test("owner must set up two-factor sign-in, then signs in with an app code or a recovery code", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "desktop only");
   test.skip(!LOCAL_DEV, "needs the local dev database (npm run db:start)");
+  test.skip(!(process.env.MFA_REQUIRED_ROLES ?? "").split(",").includes("owner"), "set MFA_REQUIRED_ROLES=owner for the dev server");
 
   // 1. first sign-in: forced to setup, nothing else reachable
   await passwordStep(page);

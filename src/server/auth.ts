@@ -220,8 +220,13 @@ export async function changePassword(tenantId: string, session: StaffSession, cu
 }
 
 // -------------------------------------------------------------- staff admin --
-/** Roles that must use two-factor sign-in (PHASE-1-REPORT P1-2). */
-export const mfaRequiredFor = (role: Role) => role === "owner";
+/**
+ * Roles that must use two-factor sign-in, from MFA_REQUIRED_ROLES (comma-separated, e.g. "owner").
+ * Unset = nobody is forced (MFA stays available to turn on in "บัญชีของฉัน").
+ * Off by default since 2026-11-18 at the owner's request while testing; set "owner" before go-live.
+ */
+export const mfaRequiredFor = (role: Role) =>
+  (process.env.MFA_REQUIRED_ROLES ?? "").split(",").map((r) => r.trim()).includes(role);
 
 export function staffActor(s: StaffSession, ip?: string): Actor {
   return { type: "staff", userId: s.userId, role: s.role, name: s.name, ip };

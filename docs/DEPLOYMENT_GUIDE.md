@@ -65,6 +65,7 @@ Vercel → Project → **Settings → Environment Variables** (Production):
 | `DATABASE_URL` | Pooled connection string แต่เปลี่ยน **user/password** เป็น `fahtalay_app` / `DATABASE_APP_PASSWORD` จากข้อ 2 · ต่อท้าย `?sslmode=require` |
 | `APP_SECRET` | ⚠ ห้ามเปลี่ยนหลังเปิดใช้ (เข้ารหัส secret ของ MFA ไว้ เปลี่ยนแล้วทุกคนต้องตั้ง MFA ใหม่) · ข้อความสุ่มยาวอย่างน้อย 32 ตัว (สร้างได้ด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) |
 | `DATABASE_POOL_MAX` | `3` (serverless เปิดหลาย instance พร้อมกัน) |
+| `MFA_REQUIRED_ROLES` | `owner` — บังคับเจ้าของใช้ยืนยันตัวตน 2 ขั้นตอน · **ยังไม่ได้ตั้ง (ช่วงทดสอบ) — ตั้งก่อนเปิดใช้จริง** |
 | `DEFAULT_TENANT_SLUG` | `fahtalay` (ไม่บังคับ) — โรงแรมที่จะแสดงเมื่อเปิดจากโดเมนที่ไม่อยู่ใน `tenant_domains` เช่น URL ของแต่ละ deployment ที่มีเลขสุ่ม · ใช้เฉพาะตอนติดตั้งโรงแรมเดียว ถ้าเป็นแพลตฟอร์มหลายโรงแรมให้เว้นว่าง |
 
 > ⚠ ห้ามใส่ `DATABASE_ADMIN_URL` (สิทธิ์เจ้าของตาราง) ใน Vercel แอปต้องใช้ role `fahtalay_app` เท่านั้น เพื่อให้ RLS แยกข้อมูลโรงแรมทำงาน

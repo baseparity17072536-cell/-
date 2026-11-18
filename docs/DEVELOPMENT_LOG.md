@@ -76,8 +76,13 @@
 - ลบไฟล์เฉพาะของโรงแรมตัวเอง (`deleteStoredFile(tenantId, url)` ตรวจ host, https, path, ไม่มี query) · `next.config` อนุญาตเฉพาะ `*.public.blob.vercel-storage.com/rooms/**`
 - Test เพิ่ม 4 (mock SDK) · mutation: ตัดการตรวจโรงแรมตอนลบ → test ล้ม
 
+### Deploy + ปิดการบังคับ MFA ช่วงทดสอบ — 2026-11-18
+- เจ้าของรัน `upgrade-0004-mfa.sql` แล้ว · push `phase-1` → `main` · ตรวจเว็บจริงผ่าน
+- ตั้งรหัสผ่านเจ้าของใหม่ผ่าน SQL (รหัสเดิมแสดงครั้งเดียวตอนติดตั้ง ไม่มีที่เก็บ)
+- เจ้าของขอปิดการบังคับ MFA เพื่อทดสอบ → `MFA_REQUIRED_ROLES` (ไม่ตั้ง = ไม่บังคับ) · ⚠ ต้องตั้ง `owner` ก่อนเปิดใช้จริง
+
 ### ถัดไป
-- ติดตั้ง `0004` บน Supabase แล้ว deploy MFA
+- ตั้ง `MFA_REQUIRED_ROLES=owner` ก่อนเปิดใช้จริง
 - เปิด Vercel Blob store (`DEPLOYMENT_GUIDE.md`)
 - Phase 2: PromptPay QR + สลิป (P1-4)
 - Phase 2 — Payment (ต้องการข้อมูลบัญชี/PromptPay/gateway จากเจ้าของ)
