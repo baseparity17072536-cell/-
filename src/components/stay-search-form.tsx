@@ -29,8 +29,9 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
   const today = useSyncExternalStore(noop, todayInBangkok, serverToday);
 
   const cell = "flex items-center gap-3 rounded-xl bg-cream px-4 py-2.5 ring-1 ring-cream-200";
-  const label = "block text-[11px] text-ink/60";
-  const input = "w-full bg-transparent text-sm font-medium outline-none";
+  // อ่านง่ายขึ้น: หัวข้อ 13px สีเข้มขึ้น · ค่าที่เลือก 16px ตัวหนา (16px ยังกัน iOS ซูมหน้าเมื่อแตะช่อง)
+  const label = "block text-[13px] font-medium leading-tight text-ink/75";
+  const input = "w-full bg-transparent text-base font-semibold leading-snug text-ink outline-none";
 
   return (
     <div className="rounded-2xl bg-white/95 p-4 shadow-[0_20px_50px_-20px_rgba(12,63,77,0.45)] backdrop-blur sm:p-5">
