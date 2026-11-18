@@ -112,7 +112,10 @@ export async function loadProperty(tx: Tx, propertyId: string) {
 
 export const ROOM_TYPE_COLS = `id, property_id, name_th, is_active, base_adults, max_adults, max_children, max_occupancy,
   max_extra_beds, base_price_satang, extra_adult_satang, child_satang, extra_bed_satang`;
-export const RATE_PLAN_COLS = `id, property_id, name_th, is_default, is_active, adjust_type, adjust_value, min_nights, translations`;
+// translations read through to_jsonb(row) so booking keeps working on a database where migration 0006
+// has not been applied yet (the column is then simply absent → no translations). Used as "FROM rate_plans" only.
+export const RATE_PLAN_COLS = `id, property_id, name_th, is_default, is_active, adjust_type, adjust_value, min_nights,
+  COALESCE(to_jsonb(rate_plans) -> 'translations', '{}'::jsonb) AS translations`;
 
 export async function loadDailyRates(tx: Tx, roomTypeIds: string[], checkIn: string, checkOut: string) {
   const rows = await many<DailyRate & { room_type_id: string }>(
