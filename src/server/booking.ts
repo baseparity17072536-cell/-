@@ -11,6 +11,7 @@ import {
   type DailyRate, type PriceRule, type RatePlanPricing, type RoomTypePricing, type TaxConfig,
 } from "./pricing";
 import { decide, ForbiddenError, type Permission } from "./rbac";
+import type { Translations } from "@/i18n";
 
 // ---------------------------------------------------------------- types --
 export type BookingSource = "web" | "phone" | "walk_in" | "facebook" | "line";
@@ -51,7 +52,9 @@ type PropertyRow = {
 export const taxOf = (p: PropertyRow): TaxConfig => ({ inclusive: p.prices_include_tax, vatBp: p.vat_bp, serviceChargeBp: p.service_charge_bp });
 
 export type RoomTypeRow = RoomTypePricing & { id: string; name_th: string; property_id: string; is_active: boolean };
-export type RatePlanRow = RatePlanPricing & { id: string; name_th: string; property_id: string; is_default: boolean; is_active: boolean };
+export type RatePlanRow = RatePlanPricing & {
+  id: string; name_th: string; property_id: string; is_default: boolean; is_active: boolean; translations: Translations;
+};
 
 export type BookingRow = {
   id: string;
@@ -109,7 +112,7 @@ export async function loadProperty(tx: Tx, propertyId: string) {
 
 export const ROOM_TYPE_COLS = `id, property_id, name_th, is_active, base_adults, max_adults, max_children, max_occupancy,
   max_extra_beds, base_price_satang, extra_adult_satang, child_satang, extra_bed_satang`;
-export const RATE_PLAN_COLS = `id, property_id, name_th, is_default, is_active, adjust_type, adjust_value, min_nights`;
+export const RATE_PLAN_COLS = `id, property_id, name_th, is_default, is_active, adjust_type, adjust_value, min_nights, translations`;
 
 export async function loadDailyRates(tx: Tx, roomTypeIds: string[], checkIn: string, checkOut: string) {
   const rows = await many<DailyRate & { room_type_id: string }>(
@@ -247,13 +250,18 @@ export type AvailabilityResult = {
   plans: {
     ratePlanId: string;
     name: string;
+    /** other languages of the rate plan name (see src/i18n tr()) */
+    translations: Translations;
     /** amount the guest pays (tax added when the property prices exclude tax) */
     total: number;
     tax: { net: number; serviceCharge: number; vat: number; inclusive: boolean };
-    nightly: { date: string; amount: number; source: string }[];
+    /** source = label as configured (Thai); kind = base | daily | rule, for other languages */
+    nightly: { date: string; amount: number; source: string; kind: "base" | "daily" | "rule" }[];
     error?: string;
+    errorCode?: string;
   }[];
   error?: string;
+  errorCode?: string;
 };
 
 export async function searchAvailability(
@@ -287,21 +295,25 @@ export async function searchAvailability(
       const d = daily.get(t.id) ?? [];
       const closed = d.some((x) => x.is_closed);
       const result: AvailabilityResult = { roomTypeId: t.id, name: t.name_th, available: free.get(t.id) ?? 0, closed, plans: [] };
-      if (!party) result.error = "ต้องมีผู้ใหญ่อย่างน้อย 1 ท่านต่อห้อง";
+      if (!party) Object.assign(result, { error: "ต้องมีผู้ใหญ่อย่างน้อย 1 ท่านต่อห้อง", errorCode: "OCCUPANCY" });
       for (const plan of plans) {
         try {
           if (!party) throw new PricingError("OCCUPANCY", result.error!);
           const perRoom = party.map((o) => priceRoom(t, plan, d, q.checkIn, q.checkOut, o, rules.get(t.id) ?? []));
-          const nightly = perRoom[0].map((n, i) => ({ date: n.date, amount: perRoom.reduce((s, r) => s + r[i].room + r[i].extras, 0), source: n.sourceLabel }));
+          const nightly = perRoom[0].map((n, i) => ({
+            date: n.date, amount: perRoom.reduce((s, r) => s + r[i].room + r[i].extras, 0), source: n.sourceLabel,
+            kind: n.source.startsWith("rule:") ? ("rule" as const) : (n.source as "base" | "daily"),
+          }));
           const b = computeTax(perRoom.reduce((s, r) => s + sumNights(r), 0), tax);
           result.plans.push({
-            ratePlanId: plan.id, name: plan.name_th, total: b.total,
+            ratePlanId: plan.id, name: plan.name_th, translations: plan.translations, total: b.total,
             tax: { net: b.net, serviceCharge: b.serviceCharge, vat: b.vat, inclusive: tax.inclusive }, nightly,
           });
         } catch (e) {
           if (!(e instanceof PricingError)) throw e;
           result.plans.push({
-            ratePlanId: plan.id, name: plan.name_th, total: 0, tax: { net: 0, serviceCharge: 0, vat: 0, inclusive: tax.inclusive }, nightly: [], error: e.message,
+            ratePlanId: plan.id, name: plan.name_th, translations: plan.translations, total: 0,
+            tax: { net: 0, serviceCharge: 0, vat: 0, inclusive: tax.inclusive }, nightly: [], error: e.message, errorCode: e.code,
           });
         }
       }
@@ -632,11 +644,11 @@ export async function getBooking(tenantId: string, code: string) {
     );
     if (!b) return null;
     const rooms = await many<{
-      id: string; room_type_id: string; room_type_name: string; rate_plan_name: string; adults: number; children: number;
+      id: string; room_type_id: string; rate_plan_id: string; room_type_name: string; rate_plan_name: string; adults: number; children: number;
       extra_beds: number; amount_satang: number; room_id: string | null; room_number: string | null;
     }>(
       tx,
-      `SELECT br.id, br.room_type_id, br.room_type_name, br.rate_plan_name, br.adults, br.children, br.extra_beds, br.amount_satang,
+      `SELECT br.id, br.room_type_id, br.rate_plan_id, br.room_type_name, br.rate_plan_name, br.adults, br.children, br.extra_beds, br.amount_satang,
               ra.room_id, r.room_number
        FROM booking_rooms br
        LEFT JOIN room_assignments ra ON ra.booking_room_id = br.id AND ra.active

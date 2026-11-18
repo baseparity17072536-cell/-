@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { refresh } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
+import { LOCALES, type Translations } from "@/i18n";
 import { isIsoDate } from "@/lib/dates";
 import { parseBaht } from "@/lib/money";
 import { reviewChangeRequest, withdrawChangeRequest } from "@/server/approvals";
@@ -76,6 +77,25 @@ const uuid = (fd: FormData, k: string) => {
   if (!/^[0-9a-f-]{36}$/i.test(v)) throw new DomainError("VALIDATION", "ข้อมูลอ้างอิงไม่ถูกต้อง");
   return v;
 };
+/** Other-language fields named tr_<lang>_<field> (see TranslationFields). Empty values are left out. */
+const translationsFrom = (fd: FormData, fields: string[], lists: string[] = []): Translations => {
+  const out: Translations = {};
+  for (const lang of LOCALES.filter((l) => l !== "th")) {
+    const entry: Record<string, string | string[]> = {};
+    for (const f of [...fields, ...lists]) {
+      const v = s(fd, `tr_${lang}_${f}`, 3000);
+      if (!v) continue;
+      entry[f] = lists.includes(f) ? v.split(/\r?\n/).map((a) => a.trim()).filter(Boolean).slice(0, 40) : v;
+    }
+    if (Object.keys(entry).length) out[lang] = entry;
+  }
+  return out;
+};
+const en = (t: Translations, f: string) => {
+  const v = t.en?.[f];
+  return typeof v === "string" ? v : null;
+};
+
 const weekdays = (fd: FormData) => fd.getAll("weekdays").map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
 
 // -------------------------------------------------------------------- auth --
@@ -310,15 +330,17 @@ export async function saveRoomTypeAction(_: ActionState, fd: FormData): Promise<
     const video = opt(fd, "video_url", 500);
     if (video && !/^https:\/\//.test(video)) throw new DomainError("VALIDATION", "ลิงก์วิดีโอต้องขึ้นต้นด้วย https://");
     const id = s(fd, "id") || undefined;
+    const translations = translationsFrom(fd, ["name", "description", "bed_info", "view_type"], ["amenities"]);
     const result = await saveRoomType(tenant.id, {
       id,
       property_id: propertyId,
       code,
       slug: code.toLowerCase().replace(/_/g, "-"),
       name_th: name,
-      name_en: opt(fd, "name_en", 120),
+      name_en: en(translations, "name"),
       description_th: s(fd, "description_th", 3000),
-      description_en: opt(fd, "description_en", 3000),
+      description_en: en(translations, "description"),
+      translations,
       bed_info: s(fd, "bed_info", 120),
       bed_count: int(fd, "bed_count", "จำนวนเตียง", 0, 20),
       view_type: s(fd, "view_type", 80),
@@ -447,8 +469,9 @@ export async function saveRatePlanAction(_: ActionState, fd: FormData): Promise<
       throw new DomainError("VALIDATION", adjust_type === "percent" ? "เปอร์เซ็นต์ต้องเป็นจำนวนเต็ม" : "จำนวนเงินปรับราคาไม่ถูกต้อง");
     const code = s(fd, "code", 20).toUpperCase();
     if (!/^[A-Z0-9_-]{2,20}$/.test(code)) throw new DomainError("VALIDATION", "รหัสแพ็กเกจต้องเป็น A–Z, 0–9, _ หรือ - ยาว 2–20 ตัว");
+    const translations = translationsFrom(fd, ["name", "description"]);
     const r = await saveRatePlan(tenant.id, {
-      id: s(fd, "id") || undefined, property_id: propertyId, code, name_th: s(fd, "name_th", 120), name_en: opt(fd, "name_en", 120),
+      id: s(fd, "id") || undefined, property_id: propertyId, code, name_th: s(fd, "name_th", 120), name_en: en(translations, "name"), translations,
       description_th: s(fd, "description_th", 1000), meal_plan: meal, adjust_type, adjust_value: adjust_type === "none" ? 0 : adjust_value,
       min_nights: int(fd, "min_nights", "พักขั้นต่ำ", 1, 60), is_refundable: bool(fd, "is_refundable"), is_default: bool(fd, "is_default"),
       is_active: bool(fd, "is_active"), sort_order: int(fd, "sort_order", "ลำดับ", 0, 1000),
@@ -582,8 +605,9 @@ export async function savePropertyAction(_: ActionState, fd: FormData): Promise<
       return v;
     };
     if (s(fd, "name_th").length < 2) throw new DomainError("VALIDATION", "กรุณากรอกชื่อที่พัก");
+    const translations = translationsFrom(fd, ["name", "address"]);
     const r = await updateProperty(tenant.id, {
-      id: propertyId, name_th: s(fd, "name_th", 120), name_en: opt(fd, "name_en", 120), phone: opt(fd, "phone", 40),
+      id: propertyId, name_th: s(fd, "name_th", 120), name_en: en(translations, "name"), translations, phone: opt(fd, "phone", 40),
       email: opt(fd, "email", 120), address: opt(fd, "address", 500), facebook_url: url("facebook_url"), line_url: url("line_url"),
       check_in_time: time("check_in_time", "เวลาเช็คอิน"), check_out_time: time("check_out_time", "เวลาเช็คเอาท์"),
       hold_minutes: int(fd, "hold_hours", "เวลากันห้อง (ชั่วโมง)", 1, 168) * 60,

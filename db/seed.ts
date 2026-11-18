@@ -7,6 +7,7 @@ import path from "node:path";
 import { hash } from "@node-rs/argon2";
 import pg from "pg";
 import { RESORT, ROOM_TYPES } from "./seed-data/fahtalay";
+import { seedCode, translationsSql } from "./seed-data/fahtalay-translations";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -59,7 +60,7 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
              max_adults, max_children, max_occupancy, max_extra_beds, base_price_satang, amenities, sort_order)
            VALUES ($1,$2,$3,$12,$4,$4,$5,$6,$7,$7,$8,$7,0,$9,$10,$11) RETURNING id`,
           [tenantId, propertyId, t.id, t.name, t.description, t.beds, t.capacity, Math.max(1, Math.floor(t.capacity / 2)), t.price * 100, t.amenities, i,
-           t.id.split("-").map((w) => w[0]).join("").toUpperCase().padEnd(2, "X")],
+           seedCode(t.id)],
         )
       ).rows[0].id;
       typeIds.set(t.id, id);
@@ -68,6 +69,9 @@ export async function runSeed(adminUrl: string, opts: { ownerEmail?: string; own
         await c.query("INSERT INTO rooms (tenant_id, room_type_id, room_number) VALUES ($1,$2,$3)", [tenantId, id, String(roomNo++)]);
       roomNo = Math.ceil(roomNo / 100) * 100 + 1;
     }
+
+    // English / Chinese content for the guest website
+    await c.query(translationsSql());
 
     const ownerEmail = (opts.ownerEmail ?? process.env.SEED_OWNER_EMAIL ?? "owner@fahtalay.local").toLowerCase();
     const ownerPassword = opts.ownerPassword ?? `Ft-${randomBytes(9).toString("base64url")}1`;

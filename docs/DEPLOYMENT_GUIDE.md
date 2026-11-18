@@ -80,6 +80,7 @@ Vercel → Project → **Settings → Environment Variables** (Production):
 |---|---|---|
 | `0004_mfa` | `scripts/upgrade-0004-mfa.sql` | ยืนยันตัวตน 2 ขั้นตอน · หลัง deploy เจ้าของทุกคนต้องตั้งค่าในการเข้าใช้ครั้งถัดไป |
 | `0005_maintenance` | `scripts/upgrade-0005-maintenance.sql` | ตารางงานซ่อม (เมนูแจ้งซ่อม) |
+| `0006_translations` | `scripts/upgrade-0006-translations.sql` | หน้าเว็บลูกค้า 3 ภาษา + เนื้อหาภาษาอังกฤษ/จีนของห้องพัก (เติมเฉพาะช่องที่ว่าง) · สร้างไฟล์ใหม่ด้วย `npx tsx scripts/build-upgrade-0006.ts` |
 
 ไฟล์ทำงานใน transaction เดียว ถ้าเคยรันแล้วจะหยุดด้วย `already exists` โดยไม่เปลี่ยนอะไร · บรรทัดสุดท้ายแสดงรายการ migration ที่ติดตั้งแล้ว
 

@@ -11,6 +11,9 @@ export type StaySearch = {
 
 type Raw = Record<string, string | string[] | undefined>;
 
+/** Why a stay search is not valid (translated by the page, see errors.* in the dictionaries). */
+export type StayError = "datesRequired" | "pastDate" | "dateOrder" | "maxNights" | "adultsPerRoom";
+
 function one(v: string | string[] | undefined) {
   return Array.isArray(v) ? v[0] : v;
 }
@@ -24,7 +27,7 @@ function int(v: string | undefined, min: number, max: number, fallback: number) 
 export function parseStay(
   raw: Raw,
   opts: { today?: string; maxNights?: number } = {},
-): { ok: true; search: StaySearch } | { ok: false; error: string | null; partial: Partial<StaySearch> } {
+): { ok: true; search: StaySearch } | { ok: false; error: string | null; code: StayError | null; maxNights: number; partial: Partial<StaySearch> } {
   const today = opts.today ?? todayInBangkok();
   const maxNights = opts.maxNights ?? 30;
   const checkIn = one(raw.checkin);
@@ -34,14 +37,14 @@ export function parseStay(
   const rooms = int(one(raw.rooms), 1, 10, 1);
   const partial = { checkIn, checkOut, guests, children, rooms };
 
-  if (!checkIn && !checkOut) return { ok: false, error: null, partial };
-  if (!isIsoDate(checkIn) || !isIsoDate(checkOut))
-    return { ok: false, error: "กรุณาเลือกวันเช็คอินและวันเช็คเอาท์", partial };
-  if (checkIn < today) return { ok: false, error: "วันเช็คอินต้องไม่เป็นวันที่ผ่านมาแล้ว", partial };
+  const fail = (code: StayError | null, error: string | null) => ({ ok: false as const, error, code, maxNights, partial });
+  if (!checkIn && !checkOut) return fail(null, null);
+  if (!isIsoDate(checkIn) || !isIsoDate(checkOut)) return fail("datesRequired", "กรุณาเลือกวันเช็คอินและวันเช็คเอาท์");
+  if (checkIn < today) return fail("pastDate", "วันเช็คอินต้องไม่เป็นวันที่ผ่านมาแล้ว");
   const nights = nightsBetween(checkIn, checkOut);
-  if (nights < 1) return { ok: false, error: "วันเช็คเอาท์ต้องอยู่หลังวันเช็คอิน", partial };
-  if (nights > maxNights) return { ok: false, error: `จองได้สูงสุด ${maxNights} คืนต่อการจอง`, partial };
-  if (guests < rooms) return { ok: false, error: "ต้องมีผู้ใหญ่อย่างน้อย 1 ท่านต่อห้อง", partial };
+  if (nights < 1) return fail("dateOrder", "วันเช็คเอาท์ต้องอยู่หลังวันเช็คอิน");
+  if (nights > maxNights) return fail("maxNights", `จองได้สูงสุด ${maxNights} คืนต่อการจอง`);
+  if (guests < rooms) return fail("adultsPerRoom", "ต้องมีผู้ใหญ่อย่างน้อย 1 ท่านต่อห้อง");
 
   return { ok: true, search: { checkIn, checkOut, guests, children, rooms, nights } };
 }

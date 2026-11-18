@@ -1,8 +1,8 @@
 import { Check } from "lucide-react";
+import { getDict, type Locale } from "@/i18n";
 
-const STEPS = ["เลือกห้องพัก", "กรอกข้อมูลผู้เข้าพัก", "ยืนยันและชำระเงิน"];
-
-export default function Steps({ current }: { current: 1 | 2 | 3 }) {
+export default function Steps({ current, lang }: { current: 1 | 2 | 3; lang: Locale }) {
+  const STEPS = getDict(lang).steps;
   return (
     <ol className="mx-auto flex max-w-2xl items-center gap-2 text-sm">
       {STEPS.map((label, i) => {

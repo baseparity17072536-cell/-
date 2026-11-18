@@ -32,6 +32,9 @@
 | MFA (TOTP) บังคับเจ้าของ + รหัสกู้คืน (D7, ADR-0011) | ✅ | ✅ | ✅ + E2E |
 | ที่เก็บรูปบน production (Vercel Blob, P1-3) | ✅ โค้ด · 🔑 รอเปิด Blob store | — | ✅ (SDK mock) |
 
+## เพิ่มเติม: หน้าเว็บลูกค้าหลายภาษา ✅ (2026-11-18)
+ไทย · English · 中文 (URL แยกภาษา, คำแปลห้องพักแก้ในหลังบ้าน) — เพิ่มภาษาอื่นได้ด้วย dictionary 1 ไฟล์ (ADR-0012)
+
 ## Phase 2 — Payment ⬜
 โอนธนาคาร, จัดการบัญชีธนาคาร, PromptPay QR, อัปโหลด/ตรวจสลิป, Payment gateway + webhook 🔑, มัดจำ/จ่ายบางส่วน/จ่ายเต็ม, คืนเงิน, Payment ledger, ใบยืนยันการจอง PDF
 + จาก Addendum Part 7: Deposit management, Outstanding balance, Refund management

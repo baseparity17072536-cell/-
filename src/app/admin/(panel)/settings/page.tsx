@@ -1,3 +1,4 @@
+import { TranslationFields } from "@/components/admin/translation-fields";
 import { ActionForm } from "@/components/admin/action-form";
 import { ApprovalNotice, btnPrimary, Card, Field, inputCls, NoAccess, PageHeader } from "@/components/admin/ui";
 import { satangToBahtInput } from "@/lib/money";
@@ -19,12 +20,14 @@ export default async function SettingsPage() {
         <Card title="ข้อมูลที่พัก">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="ชื่อที่พัก (ไทย)"><input name="name_th" required defaultValue={p.name_th} className={inputCls} /></Field>
-            <Field label="ชื่อภาษาอังกฤษ"><input name="name_en" defaultValue={p.name_en ?? ""} className={inputCls} /></Field>
             <Field label="เบอร์โทร"><input name="phone" defaultValue={p.phone ?? ""} className={inputCls} /></Field>
             <Field label="อีเมล"><input name="email" type="email" defaultValue={p.email ?? ""} className={inputCls} /></Field>
             <Field label="ที่อยู่" className="sm:col-span-2"><textarea name="address" rows={2} defaultValue={p.address ?? ""} className={inputCls} /></Field>
             <Field label="Facebook (https://…)"><input name="facebook_url" defaultValue={p.facebook_url ?? ""} className={inputCls} /></Field>
             <Field label="LINE (https://…)"><input name="line_url" defaultValue={p.line_url ?? ""} className={inputCls} /></Field>
+          </div>
+          <div className="mt-4">
+            <TranslationFields value={p.translations} fields={[{ key: "name", label: "ชื่อที่พัก" }, { key: "address", label: "ที่อยู่", rows: 2 }]} />
           </div>
         </Card>
         <Card title="กฎการจอง">

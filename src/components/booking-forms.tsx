@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Loader2, Printer } from "lucide-react";
 import { cancelBookingAction, createBookingAction, lookupBookingAction, type FormState } from "@/app/actions";
+import { getDict, localePath, type Locale } from "@/i18n";
 
 const field =
   "mt-1 w-full rounded-lg border border-cream-200 bg-cream px-4 py-3 outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-300/40";
@@ -30,92 +31,100 @@ function Spinner({ show }: { show: boolean }) {
   return show ? <Loader2 className="size-4 animate-spin" /> : null;
 }
 
+/** The server answers (errors, redirects) in the language of the page the form was sent from. */
+const LangField = ({ lang }: { lang: Locale }) => <input type="hidden" name="lang" value={lang} />;
+
 // ----- ขั้นตอนที่ 2: ข้อมูลผู้เข้าพัก -----
-export function GuestForm({ hidden, holdHours }: { hidden: Record<string, string>; holdHours: number }) {
+export function GuestForm({ hidden, holdHours, lang }: { hidden: Record<string, string>; holdHours: number; lang: Locale }) {
+  const t = getDict(lang).form;
   const [state, action, pending] = useActionState(createBookingAction, null);
   // one key per form: double clicks / resubmits create a single booking
   const [idem] = useState(() => crypto.randomUUID());
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
+      <LangField lang={lang} />
       <input type="hidden" name="idempotency_key" value={idem} />
       {Object.entries(hidden).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}
       <label className="text-sm font-medium sm:col-span-2">
-        ชื่อ-นามสกุล <span className="text-red-600">*</span>
-        <input name="name" required autoComplete="name" className={field} placeholder="ชื่อ นามสกุล" />
+        {t.name} <span className="text-red-600">*</span>
+        <input name="name" required autoComplete="name" className={field} placeholder={t.namePh} />
       </label>
       <label className="text-sm font-medium">
-        เบอร์โทรศัพท์ <span className="text-red-600">*</span>
-        <input name="phone" type="tel" required autoComplete="tel" className={field} placeholder="08x-xxx-xxxx" />
+        {t.phone} <span className="text-red-600">*</span>
+        <input name="phone" type="tel" required autoComplete="tel" className={field} placeholder={lang === "th" ? "08x-xxx-xxxx" : "+66 8x xxx xxxx"} />
       </label>
       <label className="text-sm font-medium">
-        อีเมล
+        {t.email}
         <input name="email" type="email" autoComplete="email" className={field} placeholder="you@example.com" />
       </label>
       <label className="text-sm font-medium sm:col-span-2">
-        คำขอพิเศษ
-        <textarea name="note" rows={3} className={field} placeholder="เช่น ขอเตียงเสริม, เช็คอินดึก" />
+        {t.note}
+        <textarea name="note" rows={3} className={field} placeholder={t.notePh} />
       </label>
       <label className="flex items-start gap-3 text-sm sm:col-span-2">
         <input name="accept" type="checkbox" required className="mt-1 size-4 accent-[#c49a4c]" />
         <span>
-          ฉันยอมรับ{" "}
-          <a href="/booking/policy" target="_blank" className="font-semibold text-gold-600 underline">
-            เงื่อนไขการจอง
+          {t.acceptPre}{" "}
+          <a href={localePath(lang, "/booking/policy")} target="_blank" className="font-semibold text-gold-600 underline">
+            {t.acceptLink}
           </a>
-          : ระบบจะกันห้องไว้ {holdHours} ชั่วโมงเพื่อรอการชำระเงิน
-          หากไม่ได้ชำระภายในเวลาที่กำหนด การจองจะหมดอายุอัตโนมัติ
+          {t.acceptPost(holdHours)}
         </span>
       </label>
       <div className="sm:col-span-2">
         <Message state={state} />
       </div>
       <button type="submit" disabled={pending} className={`${goldBtn} sm:col-span-2`}>
-        <Spinner show={pending} /> {pending ? "กำลังจอง..." : "ยืนยันการจอง"}
+        <Spinner show={pending} /> {pending ? t.submitting : t.submit}
       </button>
     </form>
   );
 }
 
 // ----- ตรวจสอบการจอง -----
-export function LookupForm() {
+export function LookupForm({ lang }: { lang: Locale }) {
+  const t = getDict(lang).form;
   const [state, action, pending] = useActionState(lookupBookingAction, null);
   return (
     <form action={action} className="space-y-4">
+      <LangField lang={lang} />
       <label className="block text-sm font-medium">
-        รหัสการจอง
+        {t.code}
         <input name="code" required className={`${field} uppercase`} placeholder="FTXXXXXXXX" />
       </label>
       <label className="block text-sm font-medium">
-        เบอร์โทรศัพท์ที่ใช้จอง
-        <input name="phone" type="tel" required className={field} placeholder="08x-xxx-xxxx" />
+        {t.lookupPhone}
+        <input name="phone" type="tel" required className={field} placeholder={lang === "th" ? "08x-xxx-xxxx" : "+66 8x xxx xxxx"} />
       </label>
       <Message state={state} />
       <button type="submit" disabled={pending} className={`${goldBtn} w-full`}>
-        <Spinner show={pending} /> ค้นหาการจอง
+        <Spinner show={pending} /> {t.lookupSubmit}
       </button>
     </form>
   );
 }
 
 // ----- ยกเลิกการจอง (ลูกค้า) -----
-export function CancelForm({ code }: { code: string }) {
+export function CancelForm({ code, lang }: { code: string; lang: Locale }) {
+  const t = getDict(lang).form;
   const [state, action, pending] = useActionState(cancelBookingAction, null);
   if (state?.ok) return <Message state={state} />;
   return (
     <details className="rounded-xl border border-cream-200 bg-white p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-red-700">ต้องการยกเลิกการจอง?</summary>
+      <summary className="cursor-pointer text-sm font-semibold text-red-700">{t.cancelAsk}</summary>
       <form
         action={action}
         className="mt-4 space-y-3"
         onSubmit={(e) => {
-          if (!confirm("ยืนยันการยกเลิกการจองนี้?")) e.preventDefault();
+          if (!confirm(t.cancelConfirm)) e.preventDefault();
         }}
       >
+        <LangField lang={lang} />
         <input type="hidden" name="code" value={code} />
         <label className="block text-sm">
-          กรอกเบอร์โทรศัพท์ที่ใช้จองเพื่อยืนยัน
+          {t.cancelPhone}
           <input name="phone" type="tel" required className={field} />
         </label>
         <Message state={state} />
@@ -124,22 +133,21 @@ export function CancelForm({ code }: { code: string }) {
           disabled={pending}
           className="inline-flex items-center gap-2 rounded-full border border-red-600 px-5 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
         >
-          <Spinner show={pending} /> ยกเลิกการจอง
+          <Spinner show={pending} /> {t.cancelSubmit}
         </button>
       </form>
     </details>
   );
 }
 
-export function PrintButton() {
+export function PrintButton({ lang }: { lang: Locale }) {
   return (
     <button
       type="button"
       onClick={() => window.print()}
       className="inline-flex items-center gap-2 rounded-full border border-gold-500 px-5 py-2 text-sm font-semibold transition hover:bg-gold-500 hover:text-white print:hidden"
     >
-      <Printer className="size-4" /> พิมพ์ / บันทึก PDF
+      <Printer className="size-4" /> {getDict(lang).form.print}
     </button>
   );
 }
-

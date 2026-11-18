@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ArrowRight, BedDouble, ChevronLeft, ChevronRight, User } from "lucide-react";
+import { getDict, localePath, type Locale } from "@/i18n";
 
 export type Room = {
   name: string;
@@ -13,7 +14,8 @@ export type Room = {
   price: string;
 };
 
-export default function RoomsCarousel({ rooms }: { rooms: Room[] }) {
+export default function RoomsCarousel({ rooms, lang }: { rooms: Room[]; lang: Locale }) {
+  const t = getDict(lang).home;
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
@@ -39,7 +41,7 @@ export default function RoomsCarousel({ rooms }: { rooms: Room[] }) {
 
   return (
     <div className="relative">
-      <button aria-label="ก่อนหน้า" onClick={() => scroll(-1)} className={`${arrow} -left-5 lg:-left-12`}>
+      <button aria-label={t.prev} onClick={() => scroll(-1)} className={`${arrow} -left-5 lg:-left-12`}>
         <ChevronLeft className="size-5" />
       </button>
 
@@ -68,13 +70,13 @@ export default function RoomsCarousel({ rooms }: { rooms: Room[] }) {
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-2">
                   <p className="text-sm">
-                    เริ่มต้น <span className="text-2xl font-bold">{r.price}</span> บาท / คืน
+                    {t.from} <span className="text-2xl font-bold">{r.price}</span> {t.perNight}
                   </p>
                   <Link
-                    href="/booking"
+                    href={localePath(lang, "/booking")}
                     className="bg-gold flex shrink-0 items-center gap-1 rounded-full px-4 py-2 text-xs font-semibold text-white shadow transition hover:brightness-110"
                   >
-                    ดูรายละเอียด <ArrowRight className="size-3.5" />
+                    {t.viewRoom} <ArrowRight className="size-3.5" />
                   </Link>
                 </div>
               </div>
@@ -83,7 +85,7 @@ export default function RoomsCarousel({ rooms }: { rooms: Room[] }) {
         ))}
       </div>
 
-      <button aria-label="ถัดไป" onClick={() => scroll(1)} className={`${arrow} -right-5 lg:-right-12`}>
+      <button aria-label={t.next} onClick={() => scroll(1)} className={`${arrow} -right-5 lg:-right-12`}>
         <ChevronRight className="size-5" />
       </button>
 

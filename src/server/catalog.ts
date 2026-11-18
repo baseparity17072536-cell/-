@@ -1,4 +1,5 @@
 import "server-only";
+import type { Translations } from "@/i18n";
 import { todayIn } from "@/lib/dates";
 import { createChangeRequest, registerApprovalHandler } from "./approvals";
 import { audit, type Actor } from "./audit";
@@ -40,6 +41,8 @@ export type PropertyRecord = {
   check_in_time: string; check_out_time: string; hold_minutes: number; max_nights: number; booking_window_days: number;
   damage_deposit_satang: number; child_max_age: number; is_active: boolean;
   prices_include_tax: boolean; vat_bp: number; service_charge_bp: number; tax_id: string | null; legal_name: string | null;
+  /** { en: { name, address }, zh: {...} } — see src/i18n tr() */
+  translations: Translations;
 };
 
 export async function listProperties(tenantId: string) {
@@ -52,7 +55,7 @@ export async function getProperty(tenantId: string, propertyId: string) {
   return withTenant(tenantId, (tx) => one<PropertyRecord>(tx, `SELECT * FROM properties WHERE id = $1`, [propertyId]));
 }
 
-export type PropertyInput = Omit<PropertyRecord, "id" | "slug" | "is_active" | "timezone">;
+export type PropertyInput = Omit<PropertyRecord, "id" | "slug" | "is_active" | "timezone" | "translations"> & { translations?: Translations };
 
 async function applyPropertyUpdate(tx: Tx, tenantId: string, p: { id: string } & PropertyInput, actor: Actor) {
   const before = await one<PropertyRecord>(tx, "SELECT * FROM properties WHERE id = $1 FOR UPDATE", [p.id]);
@@ -61,11 +64,11 @@ async function applyPropertyUpdate(tx: Tx, tenantId: string, p: { id: string } &
     `UPDATE properties SET name_th=$2, name_en=$3, phone=$4, email=$5, address=$6, facebook_url=$7, line_url=$8,
        check_in_time=$9, check_out_time=$10, hold_minutes=$11, max_nights=$12, booking_window_days=$13,
        damage_deposit_satang=$14, child_max_age=$15, prices_include_tax=$16, vat_bp=$17, service_charge_bp=$18,
-       tax_id=$19, legal_name=$20
+       tax_id=$19, legal_name=$20, translations=COALESCE($21::jsonb, translations)
      WHERE id = $1`,
     [p.id, p.name_th, p.name_en, p.phone, p.email, p.address, p.facebook_url, p.line_url, p.check_in_time, p.check_out_time,
      p.hold_minutes, p.max_nights, p.booking_window_days, p.damage_deposit_satang, p.child_max_age,
-     p.prices_include_tax, p.vat_bp, p.service_charge_bp, p.tax_id, p.legal_name],
+     p.prices_include_tax, p.vat_bp, p.service_charge_bp, p.tax_id, p.legal_name, p.translations ? JSON.stringify(p.translations) : null],
   );
   await audit(tx, tenantId, actor, "property.update", "property", p.id, { before, after: p });
 }
@@ -92,6 +95,8 @@ export type RoomTypeRecord = {
   description_en: string | null; bed_info: string; size_sqm: number | null; base_adults: number; max_adults: number;
   max_children: number; max_occupancy: number; max_extra_beds: number; base_price_satang: number; extra_adult_satang: number;
   child_satang: number; extra_bed_satang: number; amenities: string[]; sort_order: number; is_active: boolean;
+  /** { en: { name, description, bed_info, view_type, amenities[] }, zh: {...} } */
+  translations: Translations;
 };
 
 export async function listRoomTypes(tenantId: string, propertyId: string, opts: { includeInactive?: boolean } = {}) {
@@ -124,7 +129,7 @@ export async function getRoomType(tenantId: string, id: string) {
   });
 }
 
-export type RoomTypeInput = Omit<RoomTypeRecord, "id"> & { id?: string };
+export type RoomTypeInput = Omit<RoomTypeRecord, "id" | "translations"> & { id?: string; translations?: Translations };
 const PRICE_FIELDS = ["base_price_satang", "extra_adult_satang", "child_satang", "extra_bed_satang"] as const;
 type PriceChange = { id: string; name: string } & Pick<RoomTypeRecord, (typeof PRICE_FIELDS)[number]>;
 
@@ -164,12 +169,12 @@ export async function saveRoomType(tenantId: string, t: RoomTypeInput, actor: Ac
             `INSERT INTO room_types (tenant_id, property_id, slug, name_th, name_en, description_th, description_en, bed_info,
                size_sqm, base_adults, max_adults, max_children, max_occupancy, max_extra_beds, base_price_satang,
                extra_adult_satang, child_satang, extra_bed_satang, amenities, sort_order, is_active,
-               code, view_type, bed_count, building, video_url)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING id`,
+               code, view_type, bed_count, building, video_url, translations)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING id`,
             [tenantId, t.property_id, t.slug, t.name_th, t.name_en, t.description_th, t.description_en, t.bed_info, t.size_sqm,
              t.base_adults, t.max_adults, t.max_children, t.max_occupancy, t.max_extra_beds, t.base_price_satang,
              t.extra_adult_satang, t.child_satang, t.extra_bed_satang, t.amenities, t.sort_order, t.is_active,
-             t.code, t.view_type, t.bed_count, t.building, t.video_url],
+             t.code, t.view_type, t.bed_count, t.building, t.video_url, JSON.stringify(t.translations ?? {})],
           ),
         "รหัสประเภทห้อง (code) หรือ slug นี้ถูกใช้แล้ว",
         tx,
@@ -185,11 +190,12 @@ export async function saveRoomType(tenantId: string, t: RoomTypeInput, actor: Ac
         tx.query(
           `UPDATE room_types SET slug=$2, name_th=$3, name_en=$4, description_th=$5, description_en=$6, bed_info=$7, size_sqm=$8,
              base_adults=$9, max_adults=$10, max_children=$11, max_occupancy=$12, max_extra_beds=$13, amenities=$14,
-             sort_order=$15, is_active=$16, code=$17, view_type=$18, bed_count=$19, building=$20, video_url=$21
+             sort_order=$15, is_active=$16, code=$17, view_type=$18, bed_count=$19, building=$20, video_url=$21,
+             translations=COALESCE($22::jsonb, translations)
            WHERE id = $1`,
           [t.id, t.slug, t.name_th, t.name_en, t.description_th, t.description_en, t.bed_info, t.size_sqm, t.base_adults,
            t.max_adults, t.max_children, t.max_occupancy, t.max_extra_beds, t.amenities, t.sort_order, t.is_active,
-           t.code, t.view_type, t.bed_count, t.building, t.video_url],
+           t.code, t.view_type, t.bed_count, t.building, t.video_url, t.translations ? JSON.stringify(t.translations) : null],
         ),
       "รหัสประเภทห้อง (code) หรือ slug นี้ถูกใช้แล้ว",
       tx,
@@ -401,8 +407,10 @@ export type RatePlanRecord = {
   id: string; property_id: string; code: string; name_th: string; name_en: string | null; description_th: string;
   meal_plan: "room_only" | "breakfast" | "half_board" | "full_board"; adjust_type: "none" | "percent" | "fixed";
   adjust_value: number; min_nights: number; is_refundable: boolean; is_default: boolean; is_active: boolean; sort_order: number;
+  /** { en: { name, description }, zh: {...} } */
+  translations: Translations;
 };
-export type RatePlanInput = Omit<RatePlanRecord, "id"> & { id?: string };
+export type RatePlanInput = Omit<RatePlanRecord, "id" | "translations"> & { id?: string; translations?: Translations };
 
 export async function listRatePlans(tenantId: string, propertyId: string) {
   return withTenant(tenantId, (tx) =>
@@ -413,12 +421,14 @@ export async function listRatePlans(tenantId: string, propertyId: string) {
 async function applyRatePlan(tx: Tx, tenantId: string, p: RatePlanInput, actor: Actor) {
   if (p.is_default && !p.is_active) throw new DomainError("VALIDATION", "แพ็กเกจหลักต้องเปิดใช้งานอยู่เสมอ");
   if (p.is_default) await tx.query("UPDATE rate_plans SET is_default = false WHERE property_id = $1 AND is_default AND id IS DISTINCT FROM $2", [p.property_id, p.id ?? null]);
-  const values = [p.code, p.name_th, p.name_en, p.description_th, p.meal_plan, p.adjust_type, p.adjust_value, p.min_nights, p.is_refundable, p.is_default, p.is_active, p.sort_order];
+  const values = [p.code, p.name_th, p.name_en, p.description_th, p.meal_plan, p.adjust_type, p.adjust_value, p.min_nights, p.is_refundable,
+    p.is_default, p.is_active, p.sort_order, p.translations ? JSON.stringify(p.translations) : null];
   if (p.id) {
     const r = await uniqueGuard(
       () => tx.query(
         `UPDATE rate_plans SET code=$2, name_th=$3, name_en=$4, description_th=$5, meal_plan=$6, adjust_type=$7, adjust_value=$8,
-           min_nights=$9, is_refundable=$10, is_default=$11, is_active=$12, sort_order=$13 WHERE id=$1`,
+           min_nights=$9, is_refundable=$10, is_default=$11, is_active=$12, sort_order=$13,
+           translations=COALESCE($14::jsonb, translations) WHERE id=$1`,
         [p.id, ...values],
       ),
       `รหัสแพ็กเกจ ${p.code} ถูกใช้แล้ว`, tx,
@@ -429,8 +439,8 @@ async function applyRatePlan(tx: Tx, tenantId: string, p: RatePlanInput, actor: 
       () => one<{ id: string }>(
         tx,
         `INSERT INTO rate_plans (tenant_id, property_id, code, name_th, name_en, description_th, meal_plan, adjust_type, adjust_value,
-           min_nights, is_refundable, is_default, is_active, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+           min_nights, is_refundable, is_default, is_active, sort_order, translations)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,COALESCE($15::jsonb, '{}'::jsonb)) RETURNING id`,
         [tenantId, p.property_id, ...values],
       ),
       `รหัสแพ็กเกจ ${p.code} ถูกใช้แล้ว`, tx,

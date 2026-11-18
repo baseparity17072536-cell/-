@@ -32,7 +32,8 @@
 
 | Path | ใคร | หมายเหตุ |
 |---|---|---|
-| `/` | ลูกค้า | หน้าแรก ค้นหาห้องว่าง |
+| `/` | ลูกค้า | หน้าแรก ค้นหาห้องว่าง (ภาษาไทย) |
+| `/en/…`, `/zh/…` | ลูกค้า | หน้าเดียวกันภาษาอังกฤษ / จีน (ทุกหน้าลูกค้า) · `/th/…` redirect 308 ไปที่ URL ไม่มี prefix · ดูข้อ 2.1 |
 | `/booking?checkin&checkout&guests&rooms&children` | ลูกค้า | เลือกห้อง/แพ็กเกจ แสดงราคาจากระบบราคาจริง |
 | `/booking/details` | ลูกค้า | กรอกข้อมูลผู้จอง → `createBookingAction` |
 | `/booking/[code]` | ลูกค้าเจ้าของการจอง | ดูได้เฉพาะ browser ที่ได้สิทธิ์ (cookie ที่ลงชื่อด้วย `APP_SECRET`) หลังจองหรือหลังค้นหาด้วยเบอร์โทร |
@@ -45,6 +46,16 @@
 | `/admin/housekeeping?f=dirty|ready|occupied|blocked` | `housekeeping.update` | กระดานแม่บ้าน |
 | `/admin/maintenance?show=closed&room=<id>` | พนักงาน | งานซ่อม (`room` = เลือกห้องในฟอร์มไว้ให้) |
 | `/admin/*` | พนักงานที่ล็อกอิน | เมนูที่เห็นขึ้นกับบทบาท (ดูข้อ 6) |
+
+### 2.1 ภาษา (`src/proxy.ts` · `src/i18n/`)
+- หน้าลูกค้าอยู่ใต้ `app/[lang]` (`th` | `en` | `zh`) · proxy rewrite URL ไทยที่ไม่มี prefix ไป `/th/…` ภายใน (ลิงก์เดิมใช้ได้หมด) · `/admin`, `/media`, ไฟล์ static ไม่ผ่าน proxy
+- หน้า `/` เท่านั้น: cookie `ft_lang` (ตั้งเมื่อกดเปลี่ยนภาษา, 1 ปี) มาก่อน → ถ้าไม่มี และ `Accept-Language` ไม่มีภาษาไทยเลย → 307 ไปภาษาที่รองรับที่ดีที่สุด · ลิงก์ลึก (เช่น `/booking`) ไม่ redirect ตามภาษาเครื่อง
+- ทุกหน้ามี `<html lang>`, canonical และ `hreflang` (th, en, zh-Hans, x-default)
+- ข้อความหน้าเว็บ: `src/i18n/dictionaries/{th,en,zh}.ts` (en/zh ต้องมีโครงเดียวกับ th — ตรวจด้วย TypeScript + `tests/unit/i18n.test.ts`)
+- ข้อมูลจากฐานข้อมูล: คอลัมน์ `translations` (jsonb) ใน `properties`, `room_types`, `rate_plans` — `{ "en": { "name": … }, "zh": { … } }` · อ่านด้วย `tr()` / `trList()`: ภาษานั้น → อังกฤษ → ไทย · คอลัมน์ `name_en`/`description_en` เดิมถูกเขียนตาม `translations.en`
+- error จาก booking service: ภาษาไทยใช้ข้อความเดิม ภาษาอื่นแปลจาก `DomainError.code` (`errorText()`) · ฟอร์มลูกค้าส่ง `lang` ไปกับ action เพื่อให้ข้อความและ redirect อยู่ภาษาเดิม
+- เพิ่มภาษาใหม่: เพิ่มใน `LOCALES` (`src/i18n/config.ts`) + ไฟล์ dictionary ใหม่ — ช่องแปลในหลังบ้านเพิ่มให้อัตโนมัติ
+- cookie `ft_access` (สิทธิ์ดูข้อมูลส่วนตัวในหน้าการจอง) ใช้ path `/` เพื่อให้ใช้ได้ทุกภาษา (cookie เก่า path `/booking` ยังอ่านได้)
 
 ## 3. Server Actions — ลูกค้า (`src/app/actions.ts`)
 

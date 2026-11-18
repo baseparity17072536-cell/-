@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect, unstable_rethrow } from "next/navigation";
+import { errorText, getDict, isLocale, localePath, type Locale } from "@/i18n";
 import { grantBookingAccess } from "@/lib/booking-access";
 import { checkRateLimit, clearRateLimit } from "@/server/auth";
 import { changeBookingStatus, createBooking, getBooking, normalizePhone } from "@/server/booking";
@@ -9,6 +10,7 @@ import { DomainError } from "@/server/errors";
 import { ForbiddenError } from "@/server/rbac";
 
 // Public (guest) actions. Every rule is enforced again inside the booking service.
+// Each form sends "lang" so messages and redirects stay in the guest's language.
 
 export type FormState = { error?: string; ok?: string } | null;
 
@@ -17,29 +19,35 @@ const num = (fd: FormData, k: string, min: number, max: number, fallback: number
   const n = Number.parseInt(str(fd, k), 10);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
+const langOf = (fd: FormData): Locale => {
+  const l = str(fd, "lang", 5);
+  return isLocale(l) ? l : "th";
+};
 
-function failure(e: unknown): FormState {
+function failure(e: unknown, lang: Locale): FormState {
   unstable_rethrow(e);
-  if (e instanceof DomainError || e instanceof ForbiddenError) return { error: e.message };
+  if (e instanceof DomainError) return { error: errorText(lang, e) };
+  if (e instanceof ForbiddenError) return { error: errorText(lang, { code: "FORBIDDEN", message: e.message }) };
   console.error("[public action]", e);
-  return { error: "ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง หรือโทรติดต่อรีสอร์ท" };
+  return { error: getDict(lang).errors.system };
 }
 
 // ----- ลูกค้า: สร้างการจอง -----
 export async function createBookingAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const lang = langOf(fd);
+  const err = getDict(lang).errors;
   const tenant = await getTenant();
   const name = str(fd, "name", 100);
   const email = str(fd, "email", 120);
-  if (name.length < 2) return { error: "กรุณากรอกชื่อ-นามสกุล" };
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "อีเมลไม่ถูกต้อง" };
-  if (fd.get("accept") !== "on") return { error: "กรุณายอมรับเงื่อนไขการจองก่อนยืนยัน" };
-  if (!(await checkRateLimit(tenant.id, `book:${await clientIp()}`, 10, 3600)))
-    return { error: "มีการจองจากเครือข่ายนี้มากเกินไป กรุณาลองใหม่ภายหลังหรือโทรติดต่อรีสอร์ท" };
+  if (name.length < 2) return { error: err.name };
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: err.email };
+  if (fd.get("accept") !== "on") return { error: err.accept };
+  if (!(await checkRateLimit(tenant.id, `book:${await clientIp()}`, 10, 3600))) return { error: err.tooManyBookings };
 
   const rooms = num(fd, "rooms", 1, 10, 1);
   const adults = num(fd, "guests", 1, 40, 2);
   const children = num(fd, "children", 0, 20, 0);
-  if (adults < rooms) return { error: "ต้องมีผู้ใหญ่อย่างน้อย 1 ท่านต่อห้อง" };
+  if (adults < rooms) return { error: err.adultsPerRoom };
   const roomTypeId = str(fd, "room", 40);
   const ratePlanId = str(fd, "plan", 40) || undefined;
 
@@ -62,38 +70,39 @@ export async function createBookingAction(_prev: FormState, fd: FormData): Promi
     }, { type: "guest" });
     code = b.code;
   } catch (e) {
-    return failure(e);
+    return failure(e, lang);
   }
   await grantBookingAccess(code);
-  redirect(`/booking/${code}?new=1`);
+  redirect(`${localePath(lang, `/booking/${code}`)}?new=1`);
 }
 
 // ----- ลูกค้า: ค้นหาการจอง -----
 export async function lookupBookingAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const lang = langOf(fd);
+  const err = getDict(lang).errors;
   const tenant = await getTenant();
   const key = `lookup:${await clientIp()}`;
-  if (!(await checkRateLimit(tenant.id, key, 5, 900))) return { error: "ค้นหาผิดหลายครั้งเกินไป กรุณารอ 15 นาทีแล้วลองใหม่" };
+  if (!(await checkRateLimit(tenant.id, key, 5, 900))) return { error: err.tooManyTries };
   const code = str(fd, "code", 20).toUpperCase();
   const b = code ? await getBooking(tenant.id, code) : null;
-  if (!b || b.guest_phone !== normalizePhone(str(fd, "phone", 30)))
-    return { error: "ไม่พบการจอง กรุณาตรวจสอบรหัสการจองและเบอร์โทรศัพท์" };
+  if (!b || b.guest_phone !== normalizePhone(str(fd, "phone", 30))) return { error: err.lookupFailed };
   await clearRateLimit(tenant.id, key);
   await grantBookingAccess(b.code);
-  redirect(`/booking/${b.code}`);
+  redirect(localePath(lang, `/booking/${b.code}`));
 }
 
 // ----- ลูกค้า: ยกเลิกการจอง (ต้องยืนยันด้วยเบอร์โทร) -----
 export async function cancelBookingAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const lang = langOf(fd);
   const tenant = await getTenant();
-  if (!(await checkRateLimit(tenant.id, `cancel:${await clientIp()}`, 5, 900)))
-    return { error: "ลองผิดหลายครั้งเกินไป กรุณารอ 15 นาทีแล้วลองใหม่" };
+  if (!(await checkRateLimit(tenant.id, `cancel:${await clientIp()}`, 5, 900))) return { error: getDict(lang).errors.tooManyTries };
   try {
     await changeBookingStatus(tenant.id, str(fd, "code", 20), "cancelled", { type: "guest" }, {
       guestPhone: str(fd, "phone", 30),
       reason: "ลูกค้ายกเลิกผ่านเว็บไซต์",
     });
   } catch (e) {
-    return failure(e);
+    return failure(e, lang);
   }
-  redirect(`/booking/${str(fd, "code", 20).toUpperCase()}?cancelled=1`);
+  redirect(`${localePath(lang, `/booking/${str(fd, "code", 20).toUpperCase()}`)}?cancelled=1`);
 }

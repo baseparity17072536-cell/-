@@ -1,3 +1,4 @@
+import { TranslationFields } from "@/components/admin/translation-fields";
 import { ActionButton, ActionForm } from "@/components/admin/action-form";
 import { MEAL_LABEL, RULE_KIND_LABEL, WEEKDAY_SHORT } from "@/components/admin/labels";
 import { ApprovalNotice, btnDanger, btnGhost, btnPrimary, Card, Empty, Field, inputCls, NoAccess, PageHeader, Table } from "@/components/admin/ui";
@@ -113,7 +114,7 @@ function PlanForm({ p, submit }: { p?: RatePlanRecord; submit: string }) {
         <Field label="ลำดับ"><input name="sort_order" type="number" min={0} defaultValue={p?.sort_order ?? 0} className={inputCls} /></Field>
       </div>
       <Field label="รายละเอียด"><input name="description_th" defaultValue={p?.description_th} className={inputCls} /></Field>
-      <input type="hidden" name="name_en" value={p?.name_en ?? ""} />
+      <TranslationFields value={p?.translations} fields={[{ key: "name", label: "ชื่อแพ็กเกจ" }, { key: "description", label: "รายละเอียด" }]} />
       <div className="flex flex-wrap gap-4 text-sm">
         <label className="flex items-center gap-2"><input type="checkbox" name="is_active" defaultChecked={p?.is_active ?? true} className="size-4 accent-[#123c46]" /> เปิดใช้งาน</label>
         <label className="flex items-center gap-2"><input type="checkbox" name="is_default" defaultChecked={p?.is_default ?? false} className="size-4 accent-[#123c46]" /> แพ็กเกจหลัก</label>

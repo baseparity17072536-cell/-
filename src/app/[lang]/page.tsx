@@ -15,46 +15,51 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
+import LanguageSwitcher from "@/components/language-switcher";
 import Logo from "@/components/logo";
 import StaySearchForm from "@/components/stay-search-form";
+import { getDict, localePath, tr, type Locale } from "@/i18n";
+import { currentLang } from "@/i18n/page";
 import { formatSatang } from "@/lib/money";
 import { getPublicRoomTypes, getSite } from "@/server/site";
 import RoomsCarousel, { type Room } from "./rooms-carousel";
 
 const MAP_URL = "https://www.google.com/maps/search/?api=1&query=Fah+Talay+Resort+Ban+Phe+Rayong";
 
-async function Rooms() {
+async function Rooms({ lang }: { lang: Locale }) {
+  const t = getDict(lang).home;
   const types = await getPublicRoomTypes();
   const rooms: Room[] = types.map((r) => ({
-    name: r.name_th,
+    name: tr(r, "name", lang, r.name_th),
     image: r.images[0]?.url ?? "/images/room-1.jpg",
-    guests: `${r.max_occupancy} คน`,
-    beds: r.bed_info,
+    guests: t.guests(r.max_occupancy),
+    beds: tr(r, "bed_info", lang, r.bed_info),
     price: formatSatang(r.base_price_satang, { symbol: false }),
   }));
-  return rooms.length ? <RoomsCarousel rooms={rooms} /> : <p className="text-ink/60">ยังไม่มีห้องพักเปิดขาย</p>;
+  return rooms.length ? <RoomsCarousel rooms={rooms} lang={lang} /> : <p className="text-ink/60">{t.noRooms}</p>;
 }
 
-async function PromoCall() {
+async function PromoCall({ lang }: { lang: Locale }) {
+  const t = getDict(lang).home;
   const { property } = await getSite();
   if (!property.phone) return null;
   return (
     <>
-      <p className="mt-2 text-xs text-white/70">
-        * ส่วนลดยังไม่ถูกคำนวณในระบบจองออนไลน์ กรุณาสอบถามเงื่อนไขที่ {property.phone} ก่อนชำระเงิน
-      </p>
+      <p className="mt-2 text-xs text-white/70">{t.promoNote(property.phone)}</p>
       <a
         href={`tel:${property.phone.replace(/[^\d+]/g, "")}`}
         className="bg-gold mt-6 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-ink shadow transition hover:brightness-110"
       >
-        สอบถามโปรโมชั่น <Phone className="size-4" />
+        {t.promoCall} <Phone className="size-4" />
       </a>
     </>
   );
 }
 
-async function ContactLinks() {
+async function ContactLinks({ lang }: { lang: Locale }) {
   const { property: p } = await getSite();
+  const name = tr(p, "name", lang, p.name_th);
+  const address = tr(p, "address", lang, p.address);
   return (
     <>
       {p.phone && (
@@ -67,13 +72,13 @@ async function ContactLinks() {
           <svg viewBox="0 0 24 24" className="size-4 shrink-0 fill-current" aria-hidden>
             <path d={social.facebook} />
           </svg>
-          {p.name_en ? `${p.name_en} ${p.name_th}` : p.name_th}
+          {lang === "th" && p.name_en ? `${p.name_en} ${p.name_th}` : name}
         </a>
       )}
-      {p.address && (
+      {address && (
         <a href={MAP_URL} target="_blank" rel="noopener noreferrer" className="flex gap-3 hover:text-gold-300">
           <MapPin className="mt-0.5 size-4 shrink-0" />
-          {p.address}
+          {address}
         </a>
       )}
     </>
@@ -97,41 +102,24 @@ async function SocialLinks() {
   ));
 }
 
-async function GalleryLink() {
+async function GalleryLink({ label }: { label: string }) {
   const { property: p } = await getSite();
-  return p.facebook_url ? <OutlineLink href={p.facebook_url}>ดูภาพทั้งหมด</OutlineLink> : null;
+  return p.facebook_url ? <OutlineLink href={p.facebook_url}>{label}</OutlineLink> : null;
 }
 
-const nav = [
-  { href: "#", label: "หน้าแรก" },
-  { href: "#rooms", label: "ห้องพัก" },
-  { href: "#promotions", label: "โปรโมชั่น" },
-  { href: "#facilities", label: "สิ่งอำนวยความสะดวก" },
-  { href: "#gallery", label: "แกลเลอรี" },
-  { href: "#about", label: "เกี่ยวกับเรา" },
-  { href: "#contact", label: "ติดต่อเรา" },
+const NAV = ["#", "#rooms", "#promotions", "#facilities", "#gallery", "#about", "#contact"] as const;
+const NAV_KEY = ["home", "rooms", "promotions", "facilities", "gallery", "about", "contact"] as const;
+const HIGHLIGHT_ICONS = [BedDouble, WavesLadder, TreePalm, ConciergeBell, Wifi, Car];
+const PROMOS = [
+  { image: "/images/promo-1.jpg", title: "Early Bird" },
+  { image: "/images/promo-2.jpg", title: "Stay & Dine" },
+  { image: "/images/promo-3.jpg", title: "Family Getaway" },
 ];
-
-const highlights = [
-  { Icon: BedDouble, title: "ห้องพักหลากหลาย", text: "ตอบโจทย์ทุกการพักผ่อน" },
-  { Icon: WavesLadder, title: "สระว่ายน้ำ", text: "บรรยากาศร่มรื่น" },
-  { Icon: TreePalm, title: "ติดทะเล", text: "ใกล้หาดแม่รำพึง" },
-  { Icon: ConciergeBell, title: "ร้านอาหาร", text: "พร้อมเมนูหลากหลาย" },
-  { Icon: Wifi, title: "Wi-Fi ฟรี", text: "ทั่วบริเวณรีสอร์ท" },
-  { Icon: Car, title: "ที่จอดรถ", text: "สะดวก ปลอดภัย" },
-];
-
-const promos = [
-  { image: "/images/promo-1.jpg", title: "Early Bird", sub: "จองล่วงหน้า", value: "15%" },
-  { image: "/images/promo-2.jpg", title: "Stay & Dine", sub: "แพ็กเกจห้องพัก + อาหารเช้า", value: "สุดคุ้ม" },
-  { image: "/images/promo-3.jpg", title: "Family Getaway", sub: "พักผ่อนทั้งครอบครัว", value: "รับสิทธิ์พิเศษ" },
-];
-
-const facilities = [
-  { image: "/images/fac-pool.jpg", Icon: WavesLadder, label: "สระว่ายน้ำ" },
-  { image: "/images/fac-food.jpg", Icon: Utensils, label: "ร้านอาหาร" },
-  { image: "/images/fac-beach.jpg", Icon: TreePalm, label: "ชายหาดใกล้รีสอร์ท" },
-  { image: "/images/fac-garden.jpg", Icon: Flower2, label: "สวนพักผ่อน" },
+const FACILITIES = [
+  { image: "/images/fac-pool.jpg", Icon: WavesLadder },
+  { image: "/images/fac-food.jpg", Icon: Utensils },
+  { image: "/images/fac-beach.jpg", Icon: TreePalm },
+  { image: "/images/fac-garden.jpg", Icon: Flower2 },
 ];
 
 const gallery = ["/images/gal-1.jpg", "/images/gal-2.jpg", "/images/gal-3.jpg", "/images/gal-4.jpg"];
@@ -167,18 +155,26 @@ const social = {
     "M23.5 6.5a3 3 0 0 0-2.1-2.1C19.5 4 12 4 12 4s-7.5 0-9.4.4A3 3 0 0 0 .5 6.5 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.5 3 3 0 0 0 2.1 2.1c1.9.4 9.4.4 9.4.4s7.5 0 9.4-.4a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.5ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z",
 };
 
-export default function Home() {
+export default async function Home() {
+  const lang = await currentLang();
+  const d = getDict(lang);
+  const t = d.home;
+  const nav = NAV.map((href, i) => ({ href, label: d.nav[NAV_KEY[i]] }));
+  const highlights = t.highlights.map((h, i) => ({ ...h, Icon: HIGHLIGHT_ICONS[i] }));
+  const promos = PROMOS.map((p, i) => ({ ...p, ...t.promos[i] }));
+  const facilities = FACILITIES.map((f, i) => ({ ...f, label: t.facilities[i] }));
+  const link = (path: string) => localePath(lang, path);
   return (
     <div className="flex-1 overflow-x-clip">
       {/* ===== Hero ===== */}
       <section className="relative min-h-[640px] lg:min-h-[700px]">
-        <Image src="/images/hero.jpg" alt="ฟ้าทะเลรีสอร์ท สระว่ายน้ำและวิลล่า" fill preload sizes="100vw" className="object-cover object-[70%_center]" />
+        <Image src="/images/hero.jpg" alt={t.heroAlt} fill preload sizes="100vw" className="object-cover object-[70%_center]" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#1b2f4f] via-[#2c3f63]/70 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-b from-[#0c2238]/60 via-transparent to-transparent" />
 
         <header className="relative z-20">
           <nav className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-4 py-5 text-white sm:px-6">
-            <a href="#" aria-label="ฟ้าทะเลรีสอร์ท">
+            <a href="#" aria-label={t.localName}>
               <Logo />
             </a>
             <ul className="hidden gap-7 text-sm xl:flex">
@@ -193,12 +189,15 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <Link
-              href="/booking/lookup"
-              className="rounded-full border border-white/60 px-4 py-1.5 text-xs font-semibold transition hover:bg-white/10"
-            >
-              ตรวจสอบการจอง
-            </Link>
+            <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4">
+              <LanguageSwitcher lang={lang} label={d.lang.label} />
+              <Link
+                href={link("/booking/lookup")}
+                className="rounded-full border border-white/60 px-4 py-1.5 text-xs font-semibold transition hover:bg-white/10"
+              >
+                {d.nav.lookup}
+              </Link>
+            </div>
           </nav>
         </header>
 
@@ -210,9 +209,9 @@ export default function Home() {
                 FAHTALAY
               </span>
               <span className="text-gold block font-display text-2xl tracking-[0.6em] sm:text-3xl">RESORT</span>
-              <span className="mt-2 block text-3xl font-semibold">ฟ้าทะเลรีสอร์ท</span>
+              {lang !== "en" && <span className="mt-2 block text-3xl font-semibold">{t.localName}</span>}
             </h1>
-            <p className="mt-6 text-lg">พักผ่อน...อย่างมีระดับ ใกล้ทะเล</p>
+            <p className="mt-6 text-lg">{t.tagline}</p>
             <a
               href="#gallery"
               className="mt-5 inline-flex items-center gap-3 rounded-full border border-white/70 py-1.5 pl-1.5 pr-5 text-sm transition hover:bg-white/10"
@@ -220,7 +219,7 @@ export default function Home() {
               <span className="grid size-8 place-items-center rounded-full bg-white text-ink">
                 <Play className="size-4 fill-current" />
               </span>
-              ชมบรรยากาศรีสอร์ท
+              {t.watch}
             </a>
           </div>
         </div>
@@ -228,11 +227,11 @@ export default function Home() {
 
       {/* ===== Booking bar ===== */}
       <section id="booking" className="relative z-20 mx-auto -mt-28 max-w-6xl scroll-mt-6 px-4 sm:px-6">
-        <StaySearchForm />
+        <StaySearchForm lang={lang} />
         <p className="mt-2 text-right text-sm text-ink/60">
-          จองไว้แล้ว?{" "}
-          <Link href="/booking/lookup" className="font-semibold text-gold-600 underline">
-            ตรวจสอบการจอง
+          {t.alreadyBooked}{" "}
+          <Link href={link("/booking/lookup")} className="font-semibold text-gold-600 underline">
+            {d.nav.lookup}
           </Link>
         </p>
       </section>
@@ -255,13 +254,13 @@ export default function Home() {
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <Eyebrow>OUR ROOMS</Eyebrow>
-            <h2 className="mt-1 text-3xl font-bold sm:text-4xl">ห้องพักของเรา</h2>
-            <p className="mt-1 text-ink/70">เลือกห้องพักที่ใช่ สำหรับการพักผ่อนของคุณ</p>
+            <h2 className="mt-1 text-3xl font-bold sm:text-4xl">{t.roomsTitle}</h2>
+            <p className="mt-1 text-ink/70">{t.roomsSub}</p>
           </div>
-          <OutlineLink href="/booking">ดูห้องว่างและราคา</OutlineLink>
+          <OutlineLink href={link("/booking")}>{t.seeRates}</OutlineLink>
         </div>
         <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-white/70" />}>
-          <Rooms />
+          <Rooms lang={lang} />
         </Suspense>
       </section>
 
@@ -270,10 +269,10 @@ export default function Home() {
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_2.2fr] lg:items-center">
           <div className="text-white">
             <Eyebrow light>SPECIAL OFFER</Eyebrow>
-            <h2 className="mt-1 text-3xl font-bold sm:text-4xl">โปรโมชั่นพิเศษ</h2>
-            <p className="mt-2 text-white/80">จองตรงกับรีสอร์ท รับสิทธิ์พิเศษมากมาย</p>
+            <h2 className="mt-1 text-3xl font-bold sm:text-4xl">{t.promoTitle}</h2>
+            <p className="mt-2 text-white/80">{t.promoSub}</p>
             <Suspense>
-              <PromoCall />
+              <PromoCall lang={lang} />
             </Suspense>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -297,7 +296,7 @@ export default function Home() {
       <section id="facilities" className="mx-auto grid max-w-6xl scroll-mt-6 gap-6 px-4 pt-14 sm:px-6 lg:grid-cols-[1fr_4fr]">
         <div>
           <Eyebrow>FACILITIES</Eyebrow>
-          <h2 className="mt-1 text-2xl font-bold">สิ่งอำนวยความสะดวก</h2>
+          <h2 className="mt-1 text-2xl font-bold">{t.facilitiesTitle}</h2>
         </div>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {facilities.map(({ image, Icon, label }) => (
@@ -318,11 +317,11 @@ export default function Home() {
       <section id="gallery" className="mx-auto grid max-w-6xl scroll-mt-6 gap-6 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_4fr]">
         <div>
           <Eyebrow>GALLERY</Eyebrow>
-          <h2 className="mt-1 text-2xl font-bold">แกลเลอรี</h2>
-          <p className="mt-2 text-sm text-ink/70">บรรยากาศรีสอร์ทที่จะทำให้คุณอยากมาสัมผัสด้วยตัวเอง</p>
+          <h2 className="mt-1 text-2xl font-bold">{t.galleryTitle}</h2>
+          <p className="mt-2 text-sm text-ink/70">{t.gallerySub}</p>
           <div className="mt-4">
             <Suspense>
-              <GalleryLink />
+              <GalleryLink label={t.seeAllPhotos} />
             </Suspense>
           </div>
         </div>
@@ -331,7 +330,7 @@ export default function Home() {
             <div key={src} className="relative h-40 overflow-hidden rounded-xl shadow-md">
               <Image
                 src={src}
-                alt={`บรรยากาศฟ้าทะเลรีสอร์ท ${i + 1}`}
+                alt={t.galleryAlt(i + 1)}
                 fill
                 sizes="(min-width:768px) 20vw, 50vw"
                 className="object-cover transition duration-500 hover:scale-105"
@@ -345,18 +344,14 @@ export default function Home() {
       <section id="about" className="relative scroll-mt-6">
         <div className="grid items-center lg:grid-cols-2">
           <div className="relative h-64 sm:h-80 lg:[clip-path:ellipse(100%_100%_at_0%_50%)]">
-            <Image src="/images/about.jpg" alt="ป้ายฟ้าทะเลรีสอร์ท" fill sizes="(min-width:1024px) 50vw, 100vw" className="object-cover" />
+            <Image src="/images/about.jpg" alt={t.aboutAlt} fill sizes="(min-width:1024px) 50vw, 100vw" className="object-cover" />
           </div>
           <div className="px-4 py-12 sm:px-10 lg:max-w-xl">
             <Eyebrow>ABOUT US</Eyebrow>
-            <h2 className="mt-1 text-2xl font-bold sm:text-3xl">เกี่ยวกับ ฟ้าทะเลรีสอร์ท</h2>
-            <p className="mt-3 leading-7 text-ink/75">
-              รีสอร์ทริมทะเลแม่รำพึง จังหวัดระยอง ที่พร้อมมอบประสบการณ์การพักผ่อนอย่างมีระดับ
-              ด้วยบรรยากาศธรรมชาติริมทะเล ห้องพักสะอาดสบาย และการบริการที่อบอุ่นเป็นกันเอง
-              ใกล้อุทยานแห่งชาติเขาแหลมหญ้า–หมู่เกาะเสม็ด และท่าเรือบ้านเพ
-            </p>
+            <h2 className="mt-1 text-2xl font-bold sm:text-3xl">{t.aboutTitle}</h2>
+            <p className="mt-3 leading-7 text-ink/75">{t.aboutText}</p>
             <div className="mt-5">
-              <OutlineLink href={MAP_URL}>ดูแผนที่</OutlineLink>
+              <OutlineLink href={MAP_URL}>{t.map}</OutlineLink>
             </div>
           </div>
         </div>
@@ -371,14 +366,14 @@ export default function Home() {
           </div>
 
           <div className="space-y-3 text-sm lg:pl-8">
-            <p className="font-semibold text-white">ติดต่อเรา</p>
+            <p className="font-semibold text-white">{t.contact}</p>
             <Suspense>
-              <ContactLinks />
+              <ContactLinks lang={lang} />
             </Suspense>
           </div>
 
           <div className="text-sm lg:pl-8">
-            <p className="font-semibold text-white">เมนูหลัก</p>
+            <p className="font-semibold text-white">{t.menu}</p>
             <ul className="mt-3 space-y-1.5">
               {nav.slice(0, 6).map((n) => (
                 <li key={n.label}>
@@ -391,12 +386,12 @@ export default function Home() {
           </div>
 
           <div className="text-sm lg:pl-8">
-            <p className="font-semibold text-white">บริการลูกค้า</p>
+            <p className="font-semibold text-white">{t.service}</p>
             <ul className="mt-3 space-y-1.5">
               {[
-                { href: "/booking", label: "จองห้องพัก" },
-                { href: "/booking/lookup", label: "ตรวจสอบ / ยกเลิกการจอง" },
-                { href: "/booking/policy", label: "เงื่อนไขการจองและการเข้าพัก" },
+                { href: link("/booking"), label: t.serviceLinks.book },
+                { href: link("/booking/lookup"), label: t.serviceLinks.lookup },
+                { href: link("/booking/policy"), label: t.serviceLinks.policy },
               ].map((l) => (
                 <li key={l.href}>
                   <Link href={l.href} className="hover:text-gold-300">
@@ -408,7 +403,7 @@ export default function Home() {
           </div>
 
           <div className="text-sm lg:pl-8">
-            <p className="font-semibold text-white">ติดตามเรา</p>
+            <p className="font-semibold text-white">{t.follow}</p>
             <div className="mt-3 flex gap-3">
               <Suspense>
                 <SocialLinks />

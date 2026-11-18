@@ -3,8 +3,10 @@
 import Form from "next/form";
 import { useState, useSyncExternalStore } from "react";
 import { Baby, BedDouble, CalendarDays, ChevronDown, Search, User } from "lucide-react";
+import { getDict, localePath, type Locale } from "@/i18n";
 
 type Props = {
+  lang: Locale;
   defaults?: { checkIn?: string; checkOut?: string; guests?: number; children?: number; rooms?: number };
   title?: string;
 };
@@ -22,8 +24,9 @@ function todayInBangkok() {
 const noop = () => () => {};
 const serverToday = () => undefined;
 
-/** ฟอร์มค้นหาห้องว่าง ส่งแบบ GET ไปที่ /booking */
-export default function StaySearchForm({ defaults = {}, title = "จองห้องพัก" }: Props) {
+/** ฟอร์มค้นหาห้องว่าง ส่งแบบ GET ไปที่ /booking (ของภาษาที่ใช้อยู่) */
+export default function StaySearchForm({ lang, defaults = {}, title }: Props) {
+  const t = getDict(lang).search;
   const [checkIn, setCheckIn] = useState(defaults.checkIn ?? "");
   const [checkOut, setCheckOut] = useState(defaults.checkOut ?? "");
   const today = useSyncExternalStore(noop, todayInBangkok, serverToday);
@@ -35,13 +38,13 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
 
   return (
     <div className="rounded-2xl bg-white/95 p-4 shadow-[0_20px_50px_-20px_rgba(12,63,77,0.45)] backdrop-blur sm:p-5">
-      <Form action="/booking" className="grid items-center gap-3 sm:grid-cols-2 lg:grid-cols-[auto_1fr_1fr_1fr_0.8fr_0.8fr_auto]">
-        <h2 className="px-2 text-2xl font-bold text-ink sm:col-span-2 lg:col-span-1 lg:pr-4">{title}</h2>
+      <Form action={localePath(lang, "/booking")} className="grid items-center gap-3 sm:grid-cols-2 lg:grid-cols-[auto_1fr_1fr_1fr_0.8fr_0.8fr_auto]">
+        <h2 className="px-2 text-2xl font-bold text-ink sm:col-span-2 lg:col-span-1 lg:pr-4">{title ?? t.title}</h2>
 
         <label className={cell}>
           <CalendarDays className="size-5 shrink-0 text-ink/70" />
           <span className="flex-1">
-            <span className={label}>วันที่เช็คอิน</span>
+            <span className={label}>{t.checkIn}</span>
             <input
               name="checkin"
               type="date"
@@ -61,7 +64,7 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
         <label className={cell}>
           <CalendarDays className="size-5 shrink-0 text-ink/70" />
           <span className="flex-1">
-            <span className={label}>วันที่เช็คเอาท์</span>
+            <span className={label}>{t.checkOut}</span>
             <input
               name="checkout"
               type="date"
@@ -77,11 +80,11 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
         <label className={cell}>
           <User className="size-5 shrink-0 text-ink/70" />
           <span className="flex-1">
-            <span className={label}>ผู้เข้าพัก</span>
+            <span className={label}>{t.adultsLabel}</span>
             <select name="guests" defaultValue={String(defaults.guests ?? 2)} className={`${input} appearance-none`}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
-                  {n} ผู้ใหญ่
+                  {t.adults(n)}
                 </option>
               ))}
             </select>
@@ -92,11 +95,11 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
         <label className={cell}>
           <Baby className="size-5 shrink-0 text-ink/70" />
           <span className="flex-1">
-            <span className={label}>เด็ก</span>
+            <span className={label}>{t.childrenLabel}</span>
             <select name="children" defaultValue={String(defaults.children ?? 0)} className={`${input} appearance-none`}>
               {[0, 1, 2, 3, 4, 5, 6].map((n) => (
                 <option key={n} value={n}>
-                  {n} คน
+                  {t.children(n)}
                 </option>
               ))}
             </select>
@@ -107,11 +110,11 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
         <label className={cell}>
           <BedDouble className="size-5 shrink-0 text-ink/70" />
           <span className="flex-1">
-            <span className={label}>จำนวนห้อง</span>
+            <span className={label}>{t.roomsLabel}</span>
             <select name="rooms" defaultValue={String(defaults.rooms ?? 1)} className={`${input} appearance-none`}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>
-                  {n} ห้อง
+                  {t.rooms(n)}
                 </option>
               ))}
             </select>
@@ -124,7 +127,7 @@ export default function StaySearchForm({ defaults = {}, title = "จองห้
           className="bg-gold flex items-center justify-center gap-2 rounded-xl px-7 py-4 font-semibold text-white shadow-md transition hover:brightness-110"
         >
           <Search className="size-5" />
-          ค้นหาห้องว่าง
+          {t.submit}
         </button>
       </Form>
     </div>

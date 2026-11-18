@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-noto-sans-thai);
+  /* Chinese has no web font: fall back to the system CJK font */
+  --font-sans: var(--font-noto-sans-thai), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC";
   --font-display: var(--font-cinzel);
   --font-script: var(--font-great-vibes);
 

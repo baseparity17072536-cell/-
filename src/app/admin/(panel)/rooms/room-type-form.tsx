@@ -1,4 +1,5 @@
 import { ActionForm } from "@/components/admin/action-form";
+import { TranslationFields } from "@/components/admin/translation-fields";
 import { btnPrimary, Field, inputCls } from "@/components/admin/ui";
 import { satangToBahtInput } from "@/lib/money";
 import type { RoomTypeRecord } from "@/server/catalog";
@@ -12,11 +13,9 @@ export default function RoomTypeForm({ t, priceAccess }: { t?: RoomTypeRecord; p
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="ชื่อประเภทห้อง (ไทย)" className="sm:col-span-2"><input name="name_th" required defaultValue={t?.name_th} className={inputCls} /></Field>
         <Field label="รหัส (Room Type Code)" hint="เช่น DLX, VILLA_GV"><input name="code" required defaultValue={t?.code} pattern="[A-Za-z0-9_-]{2,20}" className={`${inputCls} uppercase`} /></Field>
-        <Field label="ชื่อภาษาอังกฤษ" className="sm:col-span-2"><input name="name_en" defaultValue={t?.name_en ?? ""} className={inputCls} /></Field>
         <Field label="ลำดับการแสดง"><input name="sort_order" type="number" min={0} max={1000} defaultValue={t?.sort_order ?? 0} className={inputCls} /></Field>
       </div>
       <Field label="รายละเอียดห้อง (ไทย)"><textarea name="description_th" rows={3} defaultValue={t?.description_th} className={inputCls} /></Field>
-      <Field label="รายละเอียดห้อง (อังกฤษ)"><textarea name="description_en" rows={2} defaultValue={t?.description_en ?? ""} className={inputCls} /></Field>
       <div className="grid gap-4 sm:grid-cols-4">
         <Field label="ประเภทเตียง"><input name="bed_info" defaultValue={t?.bed_info} placeholder="เตียงคิงไซซ์" className={inputCls} /></Field>
         <Field label="จำนวนเตียง"><input name="bed_count" type="number" min={0} max={20} defaultValue={t?.bed_count ?? 1} className={inputCls} /></Field>
@@ -52,6 +51,16 @@ export default function RoomTypeForm({ t, priceAccess }: { t?: RoomTypeRecord; p
           <input type="hidden" name="extra_bed" value={satangToBahtInput(t.extra_bed_satang)} />
         </>
       )}
+      <TranslationFields
+        value={t?.translations}
+        fields={[
+          { key: "name", label: "ชื่อประเภทห้อง" },
+          { key: "description", label: "รายละเอียดห้อง", rows: 3 },
+          { key: "bed_info", label: "ประเภทเตียง", placeholder: { en: "1 king bed", zh: "1 张大床" } },
+          { key: "view_type", label: "วิวห้อง", placeholder: { en: "Sea view", zh: "海景" } },
+          { key: "amenities", label: "สิ่งอำนวยความสะดวก", list: true },
+        ]}
+      />
       <Field label="สิ่งอำนวยความสะดวก (บรรทัดละ 1 รายการ)"><textarea name="amenities" rows={4} defaultValue={t?.amenities.join("\n")} className={inputCls} /></Field>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" defaultChecked={t?.is_active ?? true} className="size-4 accent-[#123c46]" /> เปิดขายประเภทห้องนี้</label>
     </ActionForm>
