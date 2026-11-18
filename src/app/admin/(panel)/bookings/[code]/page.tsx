@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { ActionButton, ActionForm } from "@/components/admin/action-form";
 import { SOURCE_LABEL, StatusBadge } from "@/components/admin/status-badge";
 import { btnDanger, btnGhost, btnPrimary, Card, PageHeader } from "@/components/admin/ui";
@@ -30,7 +30,9 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   if (!b) notFound();
   const canStatus = can(session.role, "booking.status");
   const cancelConfirmed = decide(session.role, "booking.cancel_confirmed");
-  const actions = canStatus ? nextStatuses(b.status, "staff") : [];
+  // no-show can only be recorded from the arrival day on
+  const actions = canStatus ? nextStatuses(b.status, "staff").filter((to) => to !== "no_show" || b.today >= b.check_in) : [];
+  const canModify = can(session.role, "booking.modify") && ["pending_payment", "payment_review", "confirmed", "checked_in"].includes(b.status);
   const canAssign = can(session.role, "booking.assign_room") && ["pending_payment", "payment_review", "confirmed", "checked_in"].includes(b.status);
   const options = canAssign ? await Promise.all(b.rooms.map((r) => assignableRooms(tenant.id, r.id))) : [];
 
@@ -40,7 +42,14 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
       <PageHeader
         title={`การจอง ${b.code}`}
         subtitle={<>สร้างเมื่อ {formatThaiDateTime(b.created_at.toISOString())} · ช่องทาง {SOURCE_LABEL[b.source] ?? b.source}</>}
-        actions={<StatusBadge status={b.status} />}
+        actions={
+          <>
+            {canModify && (
+              <Link href={`/admin/bookings/${b.code}/edit`} className={btnGhost}><Pencil className="size-4" /> แก้ไขการจอง</Link>
+            )}
+            <StatusBadge status={b.status} />
+          </>
+        }
       />
       {sp.created && <p className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200">สร้างการจองเรียบร้อย</p>}
       {typeof sp.done === "string" && (
@@ -136,7 +145,7 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
               {b.events.map((e, i) => (
                 <li key={i} className="border-l-2 border-gold-300 pl-3">
                   <p className="font-medium">
-                    {e.action === "created" ? "สร้างการจอง" : e.action === "imported" ? "นำเข้าจากระบบเดิม" : `${e.from_status ? STATUS_LABEL[e.from_status as BookingStatus] : ""} → ${STATUS_LABEL[e.to_status as BookingStatus]}`}
+                    {eventTitle(e)}
                   </p>
                   <p className="text-xs text-ink/60">
                     {formatThaiDateTime(e.created_at.toISOString())} · {e.actor_name ?? (e.actor_type === "guest" ? "ลูกค้า" : e.actor_type === "system" ? "ระบบ" : e.actor_type)}
@@ -150,6 +159,26 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
       </div>
     </>
   );
+}
+
+type BookingEvent = NonNullable<Awaited<ReturnType<typeof getBooking>>>["events"][number];
+
+function eventTitle(e: BookingEvent) {
+  const d = (e.data ?? {}) as Record<string, unknown>;
+  const money = (k: string) => (typeof d[k] === "number" ? formatSatang(d[k] as number) : "");
+  const total = d.total_before !== d.total_after ? ` · ยอด ${money("total_before")} → ${money("total_after")}` : "";
+  switch (e.action) {
+    case "created": return "สร้างการจอง";
+    case "imported": return "นำเข้าจากระบบเดิม";
+    case "dates_changed": {
+      const f = d.from as { check_in: string; check_out: string };
+      const t = d.to as { check_in: string; check_out: string };
+      return `เปลี่ยนวันที่ ${formatThaiDate(f.check_in)}–${formatThaiDate(f.check_out)} → ${formatThaiDate(t.check_in)}–${formatThaiDate(t.check_out)}${total}`;
+    }
+    case "room_type_changed": return `เปลี่ยนประเภทห้อง ${d.from} → ${d.to}${d.keep_price ? " (คิดราคาเดิม)" : ""}${total}`;
+    case "details_updated": return "แก้ไขข้อมูลผู้เข้าพัก";
+    default: return `${e.from_status ? STATUS_LABEL[e.from_status as BookingStatus] : ""} → ${STATUS_LABEL[e.to_status as BookingStatus]}`;
+  }
 }
 
 function Item({ k, v, wide }: { k: string; v: React.ReactNode; wide?: boolean }) {

@@ -12,6 +12,7 @@ import {
   SESSION_COOKIE, SESSION_HOURS, updateStaff,
 } from "@/server/auth";
 import { assignRoom, changeBookingStatus, createBooking, type BookingSource } from "@/server/booking";
+import { changeRoomType, changeStayDates, totalChangeMessage, updateBookingDetails } from "@/server/booking-changes";
 import { BOOKING_STATUSES, type BookingStatus } from "@/server/booking-status";
 import {
   addRoomTypeImage, bulkCreateRooms, deleteRoomTypeImage, moveRoomTypeImage, savePriceRule, saveRatePlan, saveRoom,
@@ -249,8 +250,11 @@ export async function bookingStatusAction(_: ActionState, fd: FormData): Promise
       reason: opt(fd, "reason", 500),
       expectedVersion: int(fd, "version", "version", 0, 1_000_000),
     });
+    const done = r.pendingApproval ? "approval" : to;
+    // quick actions on the dashboard return there; the result is shown as a banner either way
+    if (s(fd, "back") === "dashboard") redirect(`/admin?done=${done}&code=${encodeURIComponent(code)}`);
     // the button that was clicked disappears with the new status, so show the result as a page banner
-    redirect(`/admin/bookings/${code}?done=${r.pendingApproval ? "approval" : to}`);
+    redirect(`/admin/bookings/${code}?done=${done}`);
   });
 }
 
@@ -260,6 +264,36 @@ export async function assignRoomAction(_: ActionState, fd: FormData): Promise<Ac
     const roomId = s(fd, "room_id");
     await assignRoom(tenant.id, uuid(fd, "booking_room_id"), roomId ? uuid(fd, "room_id") : null, actor);
     return roomId ? "จัดห้องเรียบร้อย" : "ยกเลิกการจัดห้องแล้ว";
+  });
+}
+
+export async function changeDatesAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, actor } = await requireStaff("booking.modify");
+    const r = await changeStayDates(tenant.id, s(fd, "code", 20), { checkIn: date(fd, "check_in", "วันเช็คอิน"), checkOut: date(fd, "check_out", "วันเช็คเอาท์") }, actor,
+      { expectedVersion: int(fd, "version", "version", 0, 1_000_000) });
+    const note = r.unassigned.length ? ` · ยกเลิกการจัดห้อง ${r.unassigned.join(", ")} เพราะไม่ว่างในวันที่ใหม่ กรุณาจัดห้องใหม่` : "";
+    return `เปลี่ยนวันที่เรียบร้อย · ${totalChangeMessage(r.totalBefore, r.totalAfter)}${note}`;
+  });
+}
+
+export async function changeRoomTypeAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, actor } = await requireStaff("booking.modify");
+    const r = await changeRoomType(tenant.id, uuid(fd, "booking_room_id"), uuid(fd, "room_type_id"), actor,
+      { keepPrice: bool(fd, "keep_price"), expectedVersion: int(fd, "version", "version", 0, 1_000_000) });
+    return `เปลี่ยนประเภทห้องเรียบร้อย กรุณาจัดเลขห้องใหม่ · ${totalChangeMessage(r.totalBefore, r.totalAfter)}`;
+  });
+}
+
+export async function bookingDetailsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, actor } = await requireStaff("booking.modify");
+    const r = await updateBookingDetails(tenant.id, s(fd, "code", 20), {
+      name: s(fd, "name", 120), phone: s(fd, "phone", 30), email: opt(fd, "email", 200),
+      specialRequest: opt(fd, "special_request", 1000), internalNote: opt(fd, "internal_note", 1000),
+    }, actor, { expectedVersion: int(fd, "version", "version", 0, 1_000_000) });
+    return r.changed.length ? "บันทึกข้อมูลเรียบร้อย" : "ไม่มีข้อมูลที่เปลี่ยน";
   });
 }
 

@@ -16,6 +16,7 @@ export type Permission =
   | "booking.status" // confirm payment, check-in/out, no-show, cancel unpaid
   | "booking.cancel_confirmed"
   | "booking.assign_room"
+  | "booking.modify" // change dates, room type, guest details (prices are recalculated by the system)
   | "catalog.view"
   | "catalog.edit" // names, descriptions, images, rooms, amenities
   | "rates.edit" // base prices, daily prices, rate plans
@@ -34,6 +35,7 @@ const MATRIX: Record<Permission, Record<Role, Decision>> = {
   "booking.status":           { owner: "allow", admin: "allow",    front_desk: "allow", accountant: "deny" },
   "booking.cancel_confirmed": { owner: "allow", admin: "approval", front_desk: "approval", accountant: "deny" },
   "booking.assign_room":      { owner: "allow", admin: "allow",    front_desk: "allow", accountant: "deny" },
+  "booking.modify":           { owner: "allow", admin: "allow",    front_desk: "allow", accountant: "deny" },
   "catalog.view":             { owner: "allow", admin: "allow",    front_desk: "allow", accountant: "allow" },
   "catalog.edit":             { owner: "allow", admin: "allow",    front_desk: "deny",  accountant: "deny" },
   "rates.edit":               { owner: "allow", admin: "approval", front_desk: "deny",  accountant: "deny" },

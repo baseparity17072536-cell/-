@@ -8,7 +8,8 @@ import { inviteStaffAction, resetLinkAction, resetMfaAction, updateStaffAction }
 
 const PERM_LABEL: Record<string, string> = {
   "booking.view": "ดูการจอง", "booking.create": "สร้างการจอง / จองแทนลูกค้า", "booking.status": "ยืนยัน เช็คอิน เช็คเอาท์",
-  "booking.cancel_confirmed": "ยกเลิกการจองที่ยืนยันแล้ว", "booking.assign_room": "จัดเลขห้อง", "catalog.view": "ดูข้อมูลห้อง",
+  "booking.cancel_confirmed": "ยกเลิกการจองที่ยืนยันแล้ว", "booking.assign_room": "จัดเลขห้อง / ย้ายห้อง",
+  "booking.modify": "แก้ไขการจอง (วันที่ ประเภทห้อง ข้อมูลลูกค้า)","catalog.view": "ดูข้อมูลห้อง",
   "catalog.edit": "แก้ข้อมูลห้อง รูป ห้องจริง", "rates.edit": "แก้ราคา กฎราคา แพ็กเกจ", "inventory.close": "ปิด/เปิดขาย",
   "property.edit": "ตั้งค่าที่พักและภาษี", "users.view": "ดูรายชื่อพนักงาน", "users.manage": "จัดการพนักงาน",
   "approvals.review": "อนุมัติคำขอ", "audit.view": "ดูประวัติการแก้ไข",

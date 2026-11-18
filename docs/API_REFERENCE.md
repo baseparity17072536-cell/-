@@ -75,7 +75,13 @@
 |---|---|---|---|
 | `createStaffBookingAction` | `source` (phone/walk_in/facebook/line/web), `check_in`, `check_out`, ต่อห้อง: `room_type[]`, `adults[]`, `children[]`, `extra_beds[]`, `rate_plan_{i}`, ลูกค้า: `name`, `phone`, `email?`, `note?`, `confirm_now?`, `internal_note?`, `idempotency_key?` | `booking.create` | หลายประเภทห้องในการจองเดียวได้ · `confirm_now` = ยืนยันทันที (ขายเป็น sold) |
 | `bookingStatusAction` | `code`, `to`, `version`, `reason?` | `booking.status` (+ `booking.cancel_confirmed` สำหรับยกเลิกที่ยืนยันแล้ว) | optimistic lock ด้วย `version` · ยกเลิกต้องมีเหตุผล · เปลี่ยนได้ตาม state machine ข้อ 5 |
-| `assignRoomAction` | `booking_room_id`, `room_id?` (ว่าง = ยกเลิกการจัด) | `booking.assign_room` | ห้องจริงซ้อนช่วงวันไม่ได้ (exclusion constraint + ล็อกห้อง) |
+| `assignRoomAction` | `booking_room_id`, `room_id?` (ว่าง = ยกเลิกการจัด) | `booking.assign_room` | ห้องจริงซ้อนช่วงวันไม่ได้ (exclusion constraint + ล็อกห้อง) · ผู้เข้าพักที่เช็คอินแล้ว = ย้ายห้อง: ห้องใหม่เริ่มวันนี้ ห้องเดิม → `dirty` |
+| `changeDatesAction` | `code`, `version`, `check_in`, `check_out` | `booking.modify` | คืนเดิมราคาเดิม คืนใหม่ราคาปัจจุบัน (ไม่ใช้กฎพักขั้นต่ำ แต่คืนที่ปิดขายไม่ได้) · ย้าย held/sold ใน inventory · เช็คอินแล้วเปลี่ยนได้เฉพาะ `check_out` · `SOLD_OUT` / `ROOM_TAKEN` |
+| `changeRoomTypeAction` | `booking_room_id`, `room_type_id`, `version`, `keep_price?` | `booking.modify` | ก่อนเช็คอินเท่านั้น · ตรวจความจุห้อง · ยกเลิกเลขห้องเดิม · `keep_price` = อัปเกรดฟรี |
+| `bookingDetailsAction` | `code`, `version`, `name`, `phone`, `email?`, `special_request?`, `internal_note?` | `booking.modify` | บันทึกเฉพาะฟิลด์ที่เปลี่ยน (ค่าก่อน/หลังใน audit) |
+
+`bookingStatusAction` รับ `back=dashboard` เพื่อกลับหน้าแรกพร้อมแถบผลลัพธ์ · `no_show` ทำได้ตั้งแต่วันเช็คอิน · `checked_out` ตั้งห้องที่จัดไว้เป็น `dirty`
+Service: `src/server/booking-changes.ts` · ประวัติใน `booking_events.action`: `dates_changed`, `room_type_changed`, `details_updated`
 
 ### 4.3 ห้องพัก
 | Action | ฟิลด์หลัก | สิทธิ์ | หมายเหตุ |
@@ -127,7 +133,7 @@
 | Permission | เจ้าของ | แอดมิน | ต้อนรับ | บัญชี |
 |---|---|---|---|---|
 | booking.view | A | A | A | A |
-| booking.create / status / assign_room | A | A | A | – |
+| booking.create / status / assign_room / modify | A | A | A | – |
 | booking.cancel_confirmed | A | ข | ข | – |
 | catalog.view | A | A | A | A |
 | catalog.edit | A | A | – | – |

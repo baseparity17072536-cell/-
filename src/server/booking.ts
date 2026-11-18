@@ -48,12 +48,12 @@ type PropertyRow = {
   service_charge_bp: number;
 };
 
-const taxOf = (p: PropertyRow): TaxConfig => ({ inclusive: p.prices_include_tax, vatBp: p.vat_bp, serviceChargeBp: p.service_charge_bp });
+export const taxOf = (p: PropertyRow): TaxConfig => ({ inclusive: p.prices_include_tax, vatBp: p.vat_bp, serviceChargeBp: p.service_charge_bp });
 
-type RoomTypeRow = RoomTypePricing & { id: string; name_th: string; property_id: string; is_active: boolean };
-type RatePlanRow = RatePlanPricing & { id: string; name_th: string; property_id: string; is_default: boolean; is_active: boolean };
+export type RoomTypeRow = RoomTypePricing & { id: string; name_th: string; property_id: string; is_active: boolean };
+export type RatePlanRow = RatePlanPricing & { id: string; name_th: string; property_id: string; is_default: boolean; is_active: boolean };
 
-type BookingRow = {
+export type BookingRow = {
   id: string;
   code: string;
   property_id: string;
@@ -66,7 +66,7 @@ type BookingRow = {
 };
 
 // --------------------------------------------------------------- helpers --
-function requireStaff(actor: Actor, permission: Permission) {
+export function requireStaff(actor: Actor, permission: Permission) {
   if (actor.type !== "staff") throw new ForbiddenError();
   const d = decide(actor.role, permission);
   if (d === "deny") throw new ForbiddenError();
@@ -96,7 +96,7 @@ function validateStay(p: PropertyRow, checkIn: string, checkOut: string, actor: 
   return nights;
 }
 
-async function loadProperty(tx: Tx, propertyId: string) {
+export async function loadProperty(tx: Tx, propertyId: string) {
   const p = await one<PropertyRow>(
     tx,
     `SELECT id, name_th, timezone, hold_minutes, max_nights, booking_window_days, prices_include_tax, vat_bp, service_charge_bp
@@ -107,11 +107,11 @@ async function loadProperty(tx: Tx, propertyId: string) {
   return p;
 }
 
-const ROOM_TYPE_COLS = `id, property_id, name_th, is_active, base_adults, max_adults, max_children, max_occupancy,
+export const ROOM_TYPE_COLS = `id, property_id, name_th, is_active, base_adults, max_adults, max_children, max_occupancy,
   max_extra_beds, base_price_satang, extra_adult_satang, child_satang, extra_bed_satang`;
-const RATE_PLAN_COLS = `id, property_id, name_th, is_default, is_active, adjust_type, adjust_value, min_nights`;
+export const RATE_PLAN_COLS = `id, property_id, name_th, is_default, is_active, adjust_type, adjust_value, min_nights`;
 
-async function loadDailyRates(tx: Tx, roomTypeIds: string[], checkIn: string, checkOut: string) {
+export async function loadDailyRates(tx: Tx, roomTypeIds: string[], checkIn: string, checkOut: string) {
   const rows = await many<DailyRate & { room_type_id: string }>(
     tx,
     `SELECT room_type_id, stay_date, price_satang, is_closed, min_nights FROM daily_rates
@@ -123,7 +123,7 @@ async function loadDailyRates(tx: Tx, roomTypeIds: string[], checkIn: string, ch
   return map;
 }
 
-async function loadPriceRules(tx: Tx, roomTypeIds: string[], checkIn: string, checkOut: string) {
+export async function loadPriceRules(tx: Tx, roomTypeIds: string[], checkIn: string, checkOut: string) {
   const rows = await many<PriceRule & { room_type_id: string }>(
     tx,
     `SELECT id, room_type_id, name, date_from::text, date_to::text, weekdays::int[] AS weekdays, price_satang, priority, created_at
@@ -176,7 +176,22 @@ async function applyTransition(
     if (unassigned!.n > 0) throw new DomainError("VALIDATION", "กรุณาจัดเลขห้องให้ครบทุกห้องก่อนเช็คอิน");
   }
 
+  if (to === "no_show") {
+    const tz = (await one<{ timezone: string }>(tx, "SELECT timezone FROM properties WHERE id = $1", [b.property_id]))!.timezone;
+    if (b.check_in > todayIn(tz)) throw new DomainError("VALIDATION", "บันทึกว่าไม่มาเข้าพักได้ตั้งแต่วันเช็คอินเป็นต้นไป");
+  }
+
   await changeInventory(tx, tenantId, b, from, to);
+
+  if (to === "checked_out") {
+    // the guest has left: their rooms need cleaning before the next arrival
+    await tx.query(
+      `UPDATE rooms SET housekeeping_status = 'dirty' WHERE id IN (
+         SELECT ra.room_id FROM room_assignments ra JOIN booking_rooms br ON br.id = ra.booking_room_id
+         WHERE br.booking_id = $1 AND ra.active)`,
+      [b.id],
+    );
+  }
 
   if (to === "cancelled" || to === "expired" || to === "no_show") {
     await tx.query(
@@ -514,17 +529,31 @@ export async function applyApprovedStatusChange(
 export async function assignRoom(tenantId: string, bookingRoomId: string, roomId: string | null, actor: Actor) {
   requireStaff(actor, "booking.assign_room");
   return withTenant(tenantId, async (tx) => {
-    const br = await one<{ id: string; room_type_id: string; status: BookingStatus; check_in: string; check_out: string; code: string }>(
+    const br = await one<{ id: string; room_type_id: string; status: BookingStatus; check_in: string; check_out: string; code: string; timezone: string }>(
       tx,
-      `SELECT br.id, br.room_type_id, b.status, b.check_in, b.check_out, b.code
-       FROM booking_rooms br JOIN bookings b ON b.id = br.booking_id WHERE br.id = $1 FOR UPDATE OF b`,
+      `SELECT br.id, br.room_type_id, b.status, b.check_in, b.check_out, b.code, p.timezone
+       FROM booking_rooms br JOIN bookings b ON b.id = br.booking_id JOIN properties p ON p.id = b.property_id
+       WHERE br.id = $1 FOR UPDATE OF b`,
       [bookingRoomId],
     );
     if (!br) throw new DomainError("NOT_FOUND", "ไม่พบรายการห้องในการจอง");
     if (!["pending_payment", "payment_review", "confirmed", "checked_in"].includes(br.status))
       throw new DomainError("VALIDATION", "จัดห้องได้เฉพาะการจองที่ยังใช้งานอยู่");
 
-    await tx.query("UPDATE room_assignments SET active = false WHERE booking_room_id = $1 AND active", [bookingRoomId]);
+    // A guest already in house moves from today: the nights already slept stay with the old room.
+    const inHouse = br.status === "checked_in";
+    const today = todayIn(br.timezone);
+    const from = inHouse && today > br.check_in ? today : br.check_in;
+    if (inHouse && from >= br.check_out)
+      throw new DomainError("VALIDATION", "เลยวันเช็คเอาท์แล้ว กรุณาเช็คเอาท์หรือขยายวันพักก่อนย้ายห้อง");
+
+    const current = await one<{ room_id: string }>(tx, "SELECT room_id FROM room_assignments WHERE booking_room_id = $1 AND active", [bookingRoomId]);
+    if ((current?.room_id ?? null) === roomId) return; // nothing changed
+
+    const prev = await one<{ room_id: string }>(
+      tx, "UPDATE room_assignments SET active = false WHERE booking_room_id = $1 AND active RETURNING room_id", [bookingRoomId]);
+    if (inHouse && prev && prev.room_id !== roomId)
+      await tx.query("UPDATE rooms SET housekeeping_status = 'dirty' WHERE id = $1", [prev.room_id]);
     if (roomId) {
       // Lock the physical room first: concurrent assignments of the same room queue here, so the
       // exclusion constraint reports a clean conflict instead of PostgreSQL resolving a deadlock.
@@ -541,7 +570,7 @@ export async function assignRoom(tenantId: string, bookingRoomId: string, roomId
         await tx.query(
           `INSERT INTO room_assignments (tenant_id, booking_room_id, room_id, stay, assigned_by)
            VALUES ($1, $2, $3, daterange($4::date, $5::date, '[)'), $6)`,
-          [tenantId, bookingRoomId, roomId, br.check_in, br.check_out, actor.type === "staff" ? actor.userId : null],
+          [tenantId, bookingRoomId, roomId, from, br.check_out, actor.type === "staff" ? actor.userId : null],
         );
         await tx.query("RELEASE SAVEPOINT assign");
       } catch (e) {
@@ -549,7 +578,7 @@ export async function assignRoom(tenantId: string, bookingRoomId: string, roomId
         if (pgCode(e) === "23P01") throw new DomainError("ROOM_TAKEN", `ห้อง ${room.room_number} มีผู้เข้าพักในช่วงวันที่ทับซ้อนกันแล้ว`);
         throw e;
       }
-      await audit(tx, tenantId, actor, "booking.assign_room", "booking", br.code, { room: room.room_number });
+      await audit(tx, tenantId, actor, "booking.assign_room", "booking", br.code, { room: room.room_number, from, moved: inHouse && !!prev });
     } else {
       await audit(tx, tenantId, actor, "booking.unassign_room", "booking", br.code);
     }
@@ -565,9 +594,13 @@ export async function assignableRooms(tenantId: string, bookingRoomId: string) {
               NOT EXISTS (
                 SELECT 1 FROM room_assignments ra
                 WHERE ra.room_id = r.id AND ra.active AND ra.booking_room_id <> br.id
-                  AND ra.stay && daterange(b.check_in, b.check_out, '[)')
+                  AND ra.stay && daterange(
+                    CASE WHEN b.status = 'checked_in'
+                      THEN LEAST(GREATEST(b.check_in, (now() AT TIME ZONE p.timezone)::date), b.check_out)
+                      ELSE b.check_in END,
+                    b.check_out, '[)')
               ) AS free
-       FROM booking_rooms br JOIN bookings b ON b.id = br.booking_id
+       FROM booking_rooms br JOIN bookings b ON b.id = br.booking_id JOIN properties p ON p.id = b.property_id
        JOIN rooms r ON r.room_type_id = br.room_type_id AND r.status = 'active'
        WHERE br.id = $1 ORDER BY r.room_number`,
       [bookingRoomId],
@@ -586,15 +619,15 @@ export async function getBooking(tenantId: string, code: string) {
       special_request: string | null; internal_note: string | null; hold_expires_at: Date | null; cancelled_by: string | null;
       cancel_reason: string | null; version: number; created_at: Date; property_id: string;
       guest_name: string; guest_phone: string; guest_email: string | null;
-      tax_inclusive: boolean; service_charge_satang: number; vat_satang: number;
+      tax_inclusive: boolean; service_charge_satang: number; vat_satang: number; timezone: string;
     }>(
       tx,
       `SELECT b.id, b.code, b.status, b.source, b.check_in, b.check_out, b.adults, b.children, b.subtotal_satang,
               b.tax_inclusive, b.service_charge_satang, b.vat_satang,
               b.discount_satang, b.total_satang, b.special_request, b.internal_note, b.hold_expires_at, b.cancelled_by,
               b.cancel_reason, b.version, b.created_at, b.property_id,
-              g.full_name AS guest_name, g.phone AS guest_phone, g.email AS guest_email
-       FROM bookings b JOIN guests g ON g.id = b.guest_id WHERE b.code = $1`,
+              g.full_name AS guest_name, g.phone AS guest_phone, g.email AS guest_email, p.timezone
+       FROM bookings b JOIN guests g ON g.id = b.guest_id JOIN properties p ON p.id = b.property_id WHERE b.code = $1`,
       [code.trim().toUpperCase()],
     );
     if (!b) return null;
@@ -618,7 +651,7 @@ export async function getBooking(tenantId: string, code: string) {
        WHERE e.booking_id = $1 ORDER BY e.created_at`,
       [b.id],
     );
-    return { ...b, nights: nightsBetween(b.check_in, b.check_out), rooms, events };
+    return { ...b, nights: nightsBetween(b.check_in, b.check_out), today: todayIn(b.timezone), rooms, events };
   });
 }
 
