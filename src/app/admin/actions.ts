@@ -13,6 +13,7 @@ import {
 } from "@/server/auth";
 import { assignRoom, changeBookingStatus, createBooking, type BookingSource } from "@/server/booking";
 import { changeRoomType, changeStayDates, totalChangeMessage, updateBookingDetails } from "@/server/booking-changes";
+import { createTicket, updateTicketStatus, type TicketPriority, type TicketStatus } from "@/server/operations";
 import { BOOKING_STATUSES, type BookingStatus } from "@/server/booking-status";
 import {
   addRoomTypeImage, bulkCreateRooms, deleteRoomTypeImage, moveRoomTypeImage, savePriceRule, saveRatePlan, saveRoom,
@@ -371,11 +372,34 @@ export async function bulkRoomsAction(_: ActionState, fd: FormData): Promise<Act
 
 export async function housekeepingAction(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
-    const { tenant, actor } = await requireStaff("booking.status");
+    const { tenant, actor } = await requireStaff("housekeeping.update");
     const st = s(fd, "status") as "clean" | "dirty" | "inspected" | "out_of_service";
     if (!["clean", "dirty", "inspected", "out_of_service"].includes(st)) throw new DomainError("VALIDATION", "สถานะไม่ถูกต้อง");
     await setHousekeepingStatus(tenant.id, uuid(fd, "room_id"), st, actor);
     return "อัปเดตสถานะแม่บ้านแล้ว";
+  });
+}
+
+export async function createTicketAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, propertyId, actor } = await requireStaff("maintenance.report");
+    const priority = s(fd, "priority") as TicketPriority;
+    if (!["low", "normal", "urgent"].includes(priority)) throw new DomainError("VALIDATION", "ระดับความเร่งด่วนไม่ถูกต้อง");
+    const r = await createTicket(tenant.id, propertyId, {
+      roomId: s(fd, "room_id") ? uuid(fd, "room_id") : null, location: opt(fd, "location", 120), title: s(fd, "title", 200),
+      detail: opt(fd, "detail", 2000), priority, blockRoom: bool(fd, "block_room"),
+    }, actor);
+    return r.roomBlocked ? "บันทึกงานซ่อมแล้ว และปิดห้องงดขายระหว่างซ่อม" : "บันทึกงานซ่อมแล้ว";
+  });
+}
+
+export async function ticketStatusAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, actor } = await requireStaff("maintenance.manage");
+    const to = s(fd, "to") as TicketStatus;
+    if (!["open", "in_progress", "done", "cancelled"].includes(to)) throw new DomainError("VALIDATION", "สถานะไม่ถูกต้อง");
+    const r = await updateTicketStatus(tenant.id, uuid(fd, "id"), to, actor, { resolution: opt(fd, "reason", 2000) });
+    return r.reopened ? `ปิดงานแล้ว ห้อง ${r.reopened} กลับมาขายได้ (สถานะรอทำความสะอาด)` : "อัปเดตงานซ่อมแล้ว";
   });
 }
 

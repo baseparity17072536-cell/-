@@ -48,7 +48,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/admin"
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Stat label="กำลังเข้าพัก" value={d.inHouse.length} hint="สถานะเช็คอินแล้ว" />
-        <Stat label="ห้องรอทำความสะอาด" value={d.dirtyRooms} tone={d.dirtyRooms ? "warn" : "ok"} href="/admin/rooms#units" />
+        <Stat label="ห้องรอทำความสะอาด" value={d.dirtyRooms} tone={d.dirtyRooms ? "warn" : "ok"} href="/admin/housekeeping?f=dirty" />
         <Stat label="ยอดจองที่ยืนยัน เดือนนี้" value={formatSatang(d.revenue.month)} hint={`${d.revenue.bookings} การจอง (ตามวันเข้าพัก)`} />
         <Stat
           label="ต้องตามงาน"

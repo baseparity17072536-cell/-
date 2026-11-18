@@ -90,9 +90,16 @@
 - บั๊กที่ E2E เจอ: บนมือถือตารางในหน้าแรกดันคอลัมน์ grid กว้างเกินจอ ปุ่มด้านขวากดไม่ได้ → `min-w-0`
 - หมายเหตุ E2E: router ของ Next เก็บหน้าก่อนหน้าไว้ใน DOM (ซ่อนอยู่) ฟิลด์ชื่อซ้ำกันจึงต้องจำกัดขอบเขต locator
 
+### Phase 3 ส่วนที่ 2: แม่บ้าน + แจ้งซ่อม — 2026-11-18
+- กระดานแม่บ้าน `/admin/housekeeping`: สถานะทุกห้อง ผู้เข้าพัก แขกเข้าวันนี้ ลำดับความสำคัญ (ห้องสกปรกที่มีแขกเข้าวันนี้ก่อน)
+- แจ้งซ่อม `/admin/maintenance` + migration `0005_maintenance`: ห้องหรือจุดส่วนกลาง, ความเร่งด่วน, ปิดห้องงดขายระหว่างซ่อม (ปรับ inventory) และเปิดคืนเมื่อปิดงาน (ห้องเป็นรอทำความสะอาด)
+- สิทธิ์ใหม่ `housekeeping.update`, `maintenance.report`, `maintenance.manage` · การปิด/เปิดห้องขายต้องมี `catalog.edit`
+- เทสต์: `operations.test.ts` 5 เคส (mutation 5 จุดถูกจับได้หลังเพิ่มแถว inventory ในเทสต์) · E2E `operations.spec.ts` desktop + mobile
+- `scripts/upgrade-0005-maintenance.sql` ทดสอบแล้วบนฐานข้อมูลในเครื่อง (rollback → รันไฟล์ → รันซ้ำหยุดด้วย already exists)
+
 ### ถัดไป
 - ตั้ง `MFA_REQUIRED_ROLES=owner` ก่อนเปิดใช้จริง
 - เปิด Vercel Blob store (`DEPLOYMENT_GUIDE.md`)
-- Phase 3 ต่อ: กระดานแม่บ้าน, แจ้งซ่อม, ค่าใช้จ่ายระหว่างพัก (folio), ปิดยอดประจำวัน, รายงาน
+- Phase 3 ต่อ: ค่าใช้จ่ายระหว่างพัก (folio), ปิดยอดประจำวัน, รายงาน
 - Phase 2: PromptPay QR + สลิป (P1-4)
 - Phase 2 — Payment (ต้องการข้อมูลบัญชี/PromptPay/gateway จากเจ้าของ)

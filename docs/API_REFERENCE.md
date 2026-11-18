@@ -42,6 +42,8 @@
 | `/admin/login`, `/admin/forgot-password`, `/admin/reset-password?token=` | พนักงาน | |
 | `/admin/login/verify` | พนักงานที่เปิด MFA | ขั้นที่ 2 ของการเข้าสู่ระบบ ใช้ cookie `ft_mfa` (httpOnly, path `/admin`, อายุ 5 นาที) |
 | `/admin/mfa-setup` | ผู้ที่ล็อกอินแล้ว | ตั้งค่า MFA (QR + รหัสลับสำหรับพิมพ์เอง) · เจ้าของที่ยังไม่ตั้งค่าเข้าได้แค่หน้านี้ |
+| `/admin/housekeeping?f=dirty|ready|occupied|blocked` | `housekeeping.update` | กระดานแม่บ้าน |
+| `/admin/maintenance?show=closed&room=<id>` | พนักงาน | งานซ่อม (`room` = เลือกห้องในฟอร์มไว้ให้) |
 | `/admin/*` | พนักงานที่ล็อกอิน | เมนูที่เห็นขึ้นกับบทบาท (ดูข้อ 6) |
 
 ## 3. Server Actions — ลูกค้า (`src/app/actions.ts`)
@@ -79,6 +81,12 @@
 | `changeDatesAction` | `code`, `version`, `check_in`, `check_out` | `booking.modify` | คืนเดิมราคาเดิม คืนใหม่ราคาปัจจุบัน (ไม่ใช้กฎพักขั้นต่ำ แต่คืนที่ปิดขายไม่ได้) · ย้าย held/sold ใน inventory · เช็คอินแล้วเปลี่ยนได้เฉพาะ `check_out` · `SOLD_OUT` / `ROOM_TAKEN` |
 | `changeRoomTypeAction` | `booking_room_id`, `room_type_id`, `version`, `keep_price?` | `booking.modify` | ก่อนเช็คอินเท่านั้น · ตรวจความจุห้อง · ยกเลิกเลขห้องเดิม · `keep_price` = อัปเกรดฟรี |
 | `bookingDetailsAction` | `code`, `version`, `name`, `phone`, `email?`, `special_request?`, `internal_note?` | `booking.modify` | บันทึกเฉพาะฟิลด์ที่เปลี่ยน (ค่าก่อน/หลังใน audit) |
+
+| `housekeepingAction` | `room_id`, `status` (clean/dirty/inspected/out_of_service) | `housekeeping.update` | |
+| `createTicketAction` | `room_id?` หรือ `location?`, `title`, `detail?`, `priority` (low/normal/urgent), `block_room?` | `maintenance.report` (+ `catalog.edit` ถ้า `block_room`) | ปิดห้อง = `rooms.status='maintenance'` + ปรับ inventory · มีการจัดห้องตั้งแต่วันนี้ไป → `CONFLICT` |
+| `ticketStatusAction` | `id`, `to` (in_progress/done/cancelled/open), `reason?` (ผลการซ่อม) | `maintenance.manage` (+ `catalog.edit` ถ้างานนี้ปิดห้องไว้) | ปิดงานสุดท้ายที่ปิดห้อง → ห้องกลับมาขาย สถานะ `dirty` |
+
+Service: `src/server/operations.ts` · ตาราง `maintenance_tickets` (migration 0005)
 
 `bookingStatusAction` รับ `back=dashboard` เพื่อกลับหน้าแรกพร้อมแถบผลลัพธ์ · `no_show` ทำได้ตั้งแต่วันเช็คอิน · `checked_out` ตั้งห้องที่จัดไว้เป็น `dirty`
 Service: `src/server/booking-changes.ts` · ประวัติใน `booking_events.action`: `dates_changed`, `room_type_changed`, `details_updated`
@@ -134,6 +142,8 @@ Service: `src/server/booking-changes.ts` · ประวัติใน `booking
 |---|---|---|---|---|
 | booking.view | A | A | A | A |
 | booking.create / status / assign_room / modify | A | A | A | – |
+| housekeeping.update / maintenance.manage | A | A | A | – |
+| maintenance.report | A | A | A | A |
 | booking.cancel_confirmed | A | ข | ข | – |
 | catalog.view | A | A | A | A |
 | catalog.edit | A | A | – | – |

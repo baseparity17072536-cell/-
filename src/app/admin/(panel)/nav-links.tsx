@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BedDouble, CalendarDays, ClipboardCheck, History, LayoutDashboard, ListChecks, Plus, Settings, Tags, Users,
+  BedDouble, BrushCleaning, CalendarDays, ClipboardCheck, History, LayoutDashboard, ListChecks, Plus, Settings, Tags, Users, Wrench,
 } from "lucide-react";
 
 const ICONS = {
   dashboard: LayoutDashboard, bookings: ListChecks, plus: Plus, calendar: CalendarDays, rooms: BedDouble,
   rates: Tags, approvals: ClipboardCheck, staff: Users, settings: Settings, audit: History,
+  housekeeping: BrushCleaning, maintenance: Wrench,
 };
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };

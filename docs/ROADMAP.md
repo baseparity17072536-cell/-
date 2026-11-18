@@ -38,7 +38,8 @@
 
 ## Phase 3 — Hotel PMS 🟡 (เริ่ม 2026-11-18)
 ✅ ส่วนที่ 1: Dashboard หน้าเคาน์เตอร์ (เช็คอิน/เอาท์ด่วน, มาช้า, เลยเวลาออก), แก้ไขการจอง (วันที่ · ประเภทห้อง/อัปเกรด · ข้อมูลลูกค้า), ย้ายห้องระหว่างพัก, No-show, ห้องเป็นรอทำความสะอาดหลังเช็คเอาท์
-⬜ ที่เหลือ: Dashboard ตามบทบาท, จัดการการจอง, ย้าย/อัปเกรดห้อง, Early check-in/Late check-out, No-show, Housekeeping, Maintenance + Maintenance calendar, Guest management, Extra charges (folio: อาหารเช้า, สัตว์เลี้ยง, บริการเพิ่ม — ต่อคน/คืน/ห้อง/ครั้ง), Night audit / Daily closing, Shift handover, Guest request, Lost & found, Occupancy reports, Group/Corporate booking
+✅ ส่วนที่ 2: Housekeeping board, Maintenance tickets (ปิดห้องงดขายระหว่างซ่อม)
+⬜ ที่เหลือ: Dashboard ตามบทบาท, Early check-in/Late check-out, Maintenance calendar, Guest management, Extra charges (folio: อาหารเช้า, สัตว์เลี้ยง, บริการเพิ่ม — ต่อคน/คืน/ห้อง/ครั้ง), Night audit / Daily closing, Shift handover, Guest request, Lost & found, Occupancy reports, Group/Corporate booking
 + Addendum Part 8: Staff scheduling, Task assignment, Room inspection
 + Addendum Part 7 (ส่วนรายงาน): Revenue by room type, Daily cash report, Expense management, Tax reports
 

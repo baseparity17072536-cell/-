@@ -6,6 +6,7 @@ import Logo from "@/components/logo";
 import { Skeleton } from "@/components/admin/ui";
 import { countPendingRequests } from "@/server/approvals";
 import { requireStaff } from "@/server/context";
+import { countOpenTickets } from "@/server/operations";
 import { can, ROLE_LABEL } from "@/server/rbac";
 import { logoutAction } from "../actions";
 import NavLinks, { type NavItem } from "./nav-links";
@@ -26,13 +27,16 @@ export default function PanelLayout({ children }: LayoutProps<"/admin">) {
 }
 
 async function Sidebar() {
-  const { tenant, session } = await requireStaff();
+  const { tenant, propertyId, session } = await requireStaff();
   const pending = can(session.role, "approvals.review") ? await countPendingRequests(tenant.id) : 0;
+  const tickets = await countOpenTickets(tenant.id, propertyId);
   const items: NavItem[] = [
     { href: "/admin", label: "ภาพรวมวันนี้", icon: "dashboard" },
     { href: "/admin/bookings", label: "การจอง", icon: "bookings" },
     ...(can(session.role, "booking.create") ? [{ href: "/admin/bookings/new", label: "จองแทนลูกค้า", icon: "plus" } as NavItem] : []),
     { href: "/admin/calendar", label: "ปฏิทินห้องว่าง & ราคา", icon: "calendar" },
+    ...(can(session.role, "housekeeping.update") ? [{ href: "/admin/housekeeping", label: "แม่บ้าน", icon: "housekeeping" } as NavItem] : []),
+    { href: "/admin/maintenance", label: "แจ้งซ่อม", icon: "maintenance", badge: tickets.n || undefined },
     { href: "/admin/rooms", label: "ห้องพัก", icon: "rooms" },
     ...(session.role === "owner" || session.role === "admin" ? [{ href: "/admin/rates", label: "แพ็กเกจ & กฎราคา", icon: "rates" } as NavItem] : []),
     ...(session.role === "owner" || session.role === "admin"

@@ -79,6 +79,7 @@ Vercel → Project → **Settings → Environment Variables** (Production):
 | Migration | ไฟล์สำหรับ Supabase SQL Editor | หมายเหตุ |
 |---|---|---|
 | `0004_mfa` | `scripts/upgrade-0004-mfa.sql` | ยืนยันตัวตน 2 ขั้นตอน · หลัง deploy เจ้าของทุกคนต้องตั้งค่าในการเข้าใช้ครั้งถัดไป |
+| `0005_maintenance` | `scripts/upgrade-0005-maintenance.sql` | ตารางงานซ่อม (เมนูแจ้งซ่อม) |
 
 ไฟล์ทำงานใน transaction เดียว ถ้าเคยรันแล้วจะหยุดด้วย `already exists` โดยไม่เปลี่ยนอะไร · บรรทัดสุดท้ายแสดงรายการ migration ที่ติดตั้งแล้ว
 

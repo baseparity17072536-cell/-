@@ -298,7 +298,7 @@ export async function bulkCreateRooms(
 }
 
 export async function setHousekeepingStatus(tenantId: string, roomId: string, status: HousekeepingStatus, actor: Actor) {
-  decision(actor, "booking.status");
+  decision(actor, "housekeeping.update");
   return withTenant(tenantId, async (tx) => {
     const r = await one<{ room_number: string; prev: string }>(
       tx, `UPDATE rooms r SET housekeeping_status = $2 FROM (SELECT housekeeping_status AS prev FROM rooms WHERE id = $1) p
