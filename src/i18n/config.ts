@@ -15,9 +15,6 @@ export const LOCALE_NAME: Record<Locale, string> = { th: "ไทย", en: "Engli
 export const HTML_LANG: Record<Locale, string> = { th: "th", en: "en", zh: "zh-Hans" };
 const INTL_LOCALE: Record<Locale, string> = { th: "th-TH", en: "en-GB", zh: "zh-CN" };
 
-/** Cookie that remembers the language a guest picked (read by src/proxy.ts on "/"). */
-export const LANG_COOKIE = "ft_lang";
-
 /** Path for a page in a language: Thai unprefixed, others prefixed. `path` starts with "/". */
 export function localePath(lang: Locale, path: string) {
   if (lang === DEFAULT_LOCALE) return path;
@@ -31,7 +28,7 @@ export function splitLocale(pathname: string): { lang: Locale; path: string } {
   return { lang: DEFAULT_LOCALE, path: pathname || "/" };
 }
 
-/** Best supported language from an Accept-Language header (q-values respected), or null. */
+/** Best supported language from an Accept-Language header (q-values respected), or null. Not used for routing: Thai is always the default. */
 export function fromAcceptLanguage(header: string | null | undefined): Locale | null {
   if (!header) return null;
   const ranked = header

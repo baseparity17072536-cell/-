@@ -20,18 +20,9 @@ describe("language routing (src/proxy.ts)", () => {
     expect(routeLocale("/english")).toEqual({ type: "rewrite", to: "/th/english" });
   });
 
-  it("home page: a remembered choice wins, then the browser language unless the browser lists Thai", () => {
-    const home = (cookie: string | null, acceptLanguage: string | null) => routeLocale("/", { cookie, acceptLanguage });
-    expect(home("zh", "th-TH,th")).toEqual({ type: "redirect", to: "/zh", status: 307 });
-    expect(home("th", "en-US,en")).toEqual({ type: "rewrite", to: "/th" });
-    expect(home(null, "en-US,en;q=0.9")).toEqual({ type: "redirect", to: "/en", status: 307 });
-    expect(home(null, "zh-CN,zh;q=0.9,en;q=0.8")).toEqual({ type: "redirect", to: "/zh", status: 307 });
-    expect(home(null, "en-US,en;q=0.9,th;q=0.8")).toEqual({ type: "rewrite", to: "/th" }); // Thai listed: stay Thai
-    expect(home(null, "de-DE,de")).toEqual({ type: "rewrite", to: "/th" }); // nothing we support
-    expect(home(null, null)).toEqual({ type: "rewrite", to: "/th" });
-    expect(home("xx", null)).toEqual({ type: "rewrite", to: "/th" }); // a bad cookie is ignored
-    // deep links are never redirected by browser language
-    expect(routeLocale("/booking/lookup", { acceptLanguage: "zh-CN" })).toEqual({ type: "rewrite", to: "/th/booking/lookup" });
+  it("Thai is the primary language: no URL is redirected by browser language", () => {
+    expect(routeLocale("/")).toEqual({ type: "rewrite", to: "/th" });
+    expect(routeLocale("/booking/lookup")).toEqual({ type: "rewrite", to: "/th/booking/lookup" });
   });
 
   it("Accept-Language respects q-values and order", () => {

@@ -55,18 +55,22 @@ test("Chinese pages, errors in Chinese, and the switcher keeps the page", async 
   await expect(page.getByRole("heading", { name: "เงื่อนไขการจองและการเข้าพัก" })).toBeVisible();
 });
 
-test.describe("first visit with an English browser", () => {
+test.describe("a visitor whose browser is in English", () => {
   test.use({ locale: "en-US" });
 
-  test("lands on English, and a guest who picks Thai stays on Thai", async ({ page }) => {
+  test("still sees Thai first, and can switch to English and back", async ({ page }) => {
     await page.goto("/");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator("html")).toHaveAttribute("lang", "th");
+    await expect(page.getByRole("heading", { name: "ห้องพักของเรา" })).toBeVisible();
+
+    await page.getByRole("navigation", { name: "ภาษา" }).getByRole("link", { name: "EN" }).click();
     await page.waitForURL(/\/en$/);
     await expect(page.getByRole("heading", { name: "Our rooms" })).toBeVisible();
 
-    await page.getByRole("navigation", { name: "Language" }).getByRole("link", { name: "TH" }).click();
-    await expect(page.getByRole("heading", { name: "ห้องพักของเรา" })).toBeVisible();
+    // nothing is remembered: the plain address is Thai again
     await page.goto("/");
-    await expect(page).toHaveURL(/\/$/); // remembered: no redirect to /en any more
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { name: "ห้องพักของเรา" })).toBeVisible();
   });
 });

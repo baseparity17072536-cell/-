@@ -49,7 +49,7 @@
 
 ### 2.1 ภาษา (`src/proxy.ts` · `src/i18n/`)
 - หน้าลูกค้าอยู่ใต้ `app/[lang]` (`th` | `en` | `zh`) · proxy rewrite URL ไทยที่ไม่มี prefix ไป `/th/…` ภายใน (ลิงก์เดิมใช้ได้หมด) · `/admin`, `/media`, ไฟล์ static ไม่ผ่าน proxy
-- หน้า `/` เท่านั้น: cookie `ft_lang` (ตั้งเมื่อกดเปลี่ยนภาษา, 1 ปี) มาก่อน → ถ้าไม่มี และ `Accept-Language` ไม่มีภาษาไทยเลย → 307 ไปภาษาที่รองรับที่ดีที่สุด · ลิงก์ลึก (เช่น `/booking`) ไม่ redirect ตามภาษาเครื่อง
+- **ภาษาไทยเป็นภาษาหลัก**: URL ไม่มี prefix เป็นภาษาไทยเสมอ ไม่ redirect ตาม `Accept-Language` และไม่จำภาษาที่เลือก (เปลี่ยนภาษาด้วยลิงก์ TH · EN · 中文 เท่านั้น)
 - ทุกหน้ามี `<html lang>`, canonical และ `hreflang` (th, en, zh-Hans, x-default)
 - ข้อความหน้าเว็บ: `src/i18n/dictionaries/{th,en,zh}.ts` (en/zh ต้องมีโครงเดียวกับ th — ตรวจด้วย TypeScript + `tests/unit/i18n.test.ts`)
 - ข้อมูลจากฐานข้อมูล: คอลัมน์ `translations` (jsonb) ใน `properties`, `room_types`, `rate_plans` — `{ "en": { "name": … }, "zh": { … } }` · อ่านด้วย `tr()` / `trList()`: ภาษานั้น → อังกฤษ → ไทย · คอลัมน์ `name_en`/`description_en` เดิมถูกเขียนตาม `translations.en`
