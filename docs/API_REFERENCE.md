@@ -84,8 +84,8 @@
 | `saveRoomAction` | `id?`, `room_type_id`, `room_number`, `building?`, `floor?`, `zone?`, `status` (active/maintenance/inactive), `note?` | `catalog.edit` | |
 | `bulkRoomsAction` | `room_type_id`, `start` (เช่น `A101`), `count` 1–200, `building?`, `floor?`, `zone?` | `catalog.edit` | สร้างเลขต่อเนื่อง A101–A110 |
 | `housekeepingAction` | `room_id`, `status` (clean/dirty/inspected/out_of_service) | `booking.status` | บันทึกประวัติห้อง |
-| `uploadImageAction` | `room_type_id`, `images[]` ≤ 10 ไฟล์, `alt?` | `catalog.edit` | ≤ 5 MB/ไฟล์ · ตรวจชนิดจาก **เนื้อไฟล์** (magic bytes) รับ JPG/PNG/WebP เท่านั้น · ⚠ ยังใช้บน Vercel ไม่ได้ (ต้องมี object storage) |
-| `imageAction` | `image_id`, `op` (up/down/delete) | `catalog.edit` | ลบแล้วลบไฟล์ด้วย (ยกเว้นรูปตั้งต้นใน `/public`) |
+| `uploadImageAction` | `room_type_id`, `images[]` ≤ 10 ไฟล์, `alt?` | `catalog.edit` | ≤ 5 MB/ไฟล์ · ตรวจชนิดจาก **เนื้อไฟล์** (magic bytes) รับ JPG/PNG/WebP เท่านั้น · production เก็บใน Vercel Blob (`rooms/<tenant>/<uuid>.<ext>`), dev เก็บในดิสก์ |
+| `imageAction` | `image_id`, `op` (up/down/delete) | `catalog.edit` | ลบแล้วลบไฟล์ด้วย — เฉพาะไฟล์ของโรงแรมนี้ (ไม่แตะรูปตั้งต้นใน `/public`, โรงแรมอื่น หรือ host อื่น) |
 
 ### 4.4 ราคา
 | Action | ฟิลด์หลัก | สิทธิ์ | หมายเหตุ |
@@ -160,6 +160,7 @@
 | `APP_SECRET` | ✅ | ลงชื่อ cookie สิทธิ์ดูการจองของลูกค้า + เข้ารหัส secret ของ MFA (≥ 32 ตัว) ⚠ เปลี่ยนแล้วผู้ใช้ทุกคนต้องตั้ง MFA ใหม่ (เข้าด้วยรหัสกู้คืน) |
 | `DATABASE_POOL_MAX` | – | ขนาด connection pool (Vercel: 3) |
 | `DEFAULT_TENANT_SLUG` | – | โรงแรมสำหรับโดเมนที่ไม่ได้ลงทะเบียน (ติดตั้งโรงแรมเดียว) |
+| `BLOB_READ_WRITE_TOKEN` | production | ที่เก็บรูปห้อง (Vercel ตั้งให้เองเมื่อเชื่อม Blob store) · ไม่มี = เก็บในดิสก์ (dev) |
 | `TRUST_PROXY_HOST` | – | `1` = เชื่อ `x-forwarded-host` (ใช้เมื่ออยู่หลัง proxy ที่ควบคุมเองเท่านั้น) |
 | `DATABASE_ADMIN_URL` | เฉพาะ migrate/seed | **ห้ามใส่ใน Vercel** |
 

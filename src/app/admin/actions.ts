@@ -367,7 +367,7 @@ export async function imageAction(_: ActionState, fd: FormData): Promise<ActionS
     const op = s(fd, "op");
     if (op === "delete") {
       const img = await deleteRoomTypeImage(tenant.id, id, actor);
-      await deleteStoredFile(img.url);
+      await deleteStoredFile(tenant.id, img.url);
       return "ลบรูปแล้ว";
     }
     await moveRoomTypeImage(tenant.id, id, op === "up" ? -1 : 1, actor);

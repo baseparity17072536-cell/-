@@ -16,7 +16,7 @@
 | Property settings (+ ภาษี/ค่าบริการ) | ✅ | ✅ | ✅ |
 | Room types (code, วิว, เตียง, อาคาร, วิดีโอ, สิ่งอำนวยความสะดวก) | ✅ | ✅ | ✅ |
 | Physical rooms + bulk create (A101–A110) + housekeeping status + ประวัติห้อง | ✅ | ✅ | ✅ |
-| Room images (อัปโหลด ตรวจ magic bytes จัดลำดับ ลบ) | ✅ | ✅ | ✅ (บน Vercel ต้องมี object storage) |
+| Room images (อัปโหลด ตรวจ magic bytes จัดลำดับ ลบ) | ✅ | ✅ | ✅ |
 | Rate plans (แพ็กเกจ เช่น รวมอาหารเช้า) | ✅ | ✅ | ✅ |
 | Price rules (วันธรรมดา/ศุกร์/เสาร์/ฤดูกาล/เทศกาล) + ลำดับความสำคัญ | ✅ | ✅ | ✅ |
 | Daily rate calendar (หลายวัน, ช่วงวัน, เลือกวันในสัปดาห์, ปิดขาย, พักขั้นต่ำ) | ✅ | ✅ | ✅ + E2E |
@@ -30,7 +30,7 @@
 | Outbox แจ้งเตือน (คิวเท่านั้น ส่งจริง Phase 6) | ✅ | — | — |
 | เอกสาร: API reference, คู่มือหลังบ้าน, Phase 1 report | ✅ | — | — |
 | MFA (TOTP) บังคับเจ้าของ + รหัสกู้คืน (D7, ADR-0011) | ✅ | ✅ | ✅ + E2E |
-| ที่เก็บรูปบน production (Vercel Blob, P1-3) | ⬜ | — | — |
+| ที่เก็บรูปบน production (Vercel Blob, P1-3) | ✅ โค้ด · 🔑 รอเปิด Blob store | — | ✅ (SDK mock) |
 
 ## Phase 2 — Payment ⬜
 โอนธนาคาร, จัดการบัญชีธนาคาร, PromptPay QR, อัปโหลด/ตรวจสลิป, Payment gateway + webhook 🔑, มัดจำ/จ่ายบางส่วน/จ่ายเต็ม, คืนเงิน, Payment ledger, ใบยืนยันการจอง PDF

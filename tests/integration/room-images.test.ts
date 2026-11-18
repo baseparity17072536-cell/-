@@ -6,6 +6,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { addRoomTypeImage, deleteRoomTypeImage, getRoomType, moveRoomTypeImage } from "@/server/catalog";
 import { admin, closePools, fahtalay, staff, useAppPool } from "../setup/helpers";
 
+// Vercel Blob SDK is mocked: the tests check what we send to it, never the network
+const blob = vi.hoisted(() => ({
+  put: vi.fn(async (pathname: string) => ({ url: `https://abc123store.public.blob.vercel-storage.com/${pathname}` })),
+  del: vi.fn(async () => {}),
+}));
+vi.mock("@vercel/blob", () => blob);
+
 // storage.ts resolves its folder from process.cwd() at import time: point it at a temp dir
 // so tests never touch real uploads.
 let tmp: string;
@@ -69,12 +76,77 @@ describe("image file validation (magic bytes)", () => {
 
   it("deletes only uploaded files, never seeded /public images or crafted paths", async () => {
     const url = await storage.saveImage(a.tenantId, file(JPG, "x.jpg"));
-    await storage.deleteStoredFile(url);
+    // another hotel cannot delete it
+    await storage.deleteStoredFile(otherTenantId, url);
+    expect(existsSync(diskPath(url))).toBe(true);
+    await storage.deleteStoredFile(a.tenantId, url);
     expect(existsSync(diskPath(url))).toBe(false);
     // must not throw or touch anything
-    await storage.deleteStoredFile("/images/rooms/deluxe-1.jpg");
-    await storage.deleteStoredFile(`/media/${a.tenantId}/../../../package.json`);
+    await storage.deleteStoredFile(a.tenantId, "/images/rooms/deluxe-1.jpg");
+    await storage.deleteStoredFile(a.tenantId, `/media/${a.tenantId}/../../../package.json`);
     expect(existsSync(path.resolve(import.meta.dirname, "..", "..", "package.json"))).toBe(true);
+  });
+});
+
+describe("Vercel Blob driver (production)", () => {
+  const withEnv = async (env: Record<string, string | undefined>, fn: () => Promise<void>) => {
+    const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+    Object.assign(process.env, env);
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k];
+    try {
+      await fn();
+    } finally {
+      for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  };
+
+  it("uploads to rooms/<hotel>/<uuid>.<ext> as public, typed by content, cached, never overwriting", async () => {
+    await withEnv({ BLOB_READ_WRITE_TOKEN: "test-token" }, async () => {
+      blob.put.mockClear();
+      const url = await storage.saveImage(a.tenantId, file(PNG, "photo.jpg", "image/jpeg"));
+      expect(url).toMatch(new RegExp(`^https://abc123store\\.public\\.blob\\.vercel-storage\\.com/rooms/${a.tenantId}/[0-9a-f-]{36}\\.png$`));
+      const [pathname, body, opts] = blob.put.mock.calls[0] as unknown as [string, Buffer, Record<string, unknown>];
+      expect(pathname).toMatch(new RegExp(`^rooms/${a.tenantId}/[0-9a-f-]{36}\\.png$`));
+      expect(Buffer.from(body).equals(PNG)).toBe(true);
+      expect(opts).toMatchObject({ access: "public", contentType: "image/png", addRandomSuffix: false, cacheControlMaxAge: 31536000 });
+      expect(opts.allowOverwrite).toBeUndefined();
+      // validation still happens before anything is uploaded
+      blob.put.mockClear();
+      await expect(storage.saveImage(a.tenantId, file(Buffer.from("<svg/>"), "x.png"))).rejects.toThrow("รองรับเฉพาะไฟล์");
+      expect(blob.put).not.toHaveBeenCalled();
+    });
+  });
+
+  it("deletes only this hotel's blobs on the Blob host", async () => {
+    const mine = `https://abc123store.public.blob.vercel-storage.com/rooms/${a.tenantId}/0b4a6d0e-2f1c-4c1b-9a7e-1d2c3b4a5f60.jpg`;
+    blob.del.mockClear();
+    await storage.deleteStoredFile(a.tenantId, mine);
+    expect(blob.del).toHaveBeenCalledWith(mine);
+
+    blob.del.mockClear();
+    for (const bad of [
+      mine.replace(a.tenantId, otherTenantId), // another hotel
+      mine.replace("abc123store.public.blob.vercel-storage.com", "evil.example.com"), // foreign host
+      mine.replace("https:", "http:"),
+      `${mine}?x=1`,
+      `https://abc123store.public.blob.vercel-storage.com/rooms/${a.tenantId}/../other/x.jpg`,
+      `https://abc123store.public.blob.vercel-storage.com/backups/${a.tenantId}/0b4a6d0e-2f1c-4c1b-9a7e-1d2c3b4a5f60.jpg`,
+      "not a url",
+    ]) await storage.deleteStoredFile(a.tenantId, bad);
+    expect(blob.del).not.toHaveBeenCalled();
+  });
+
+  it("a failed blob delete does not throw (the database row is already gone)", async () => {
+    blob.del.mockRejectedValueOnce(new Error("network down"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(storage.deleteStoredFile(a.tenantId, `https://s.public.blob.vercel-storage.com/rooms/${a.tenantId}/0b4a6d0e-2f1c-4c1b-9a7e-1d2c3b4a5f60.webp`)).resolves.toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it("on Vercel without a Blob store, says what is missing instead of crashing", async () => {
+    await withEnv({ VERCEL: "1", BLOB_READ_WRITE_TOKEN: undefined, BLOB_STORE_ID: undefined }, async () => {
+      await expect(storage.saveImage(a.tenantId, file(JPG, "x.jpg"))).rejects.toThrow("ยังไม่ได้ตั้งค่าที่เก็บรูป");
+    });
   });
 });
 

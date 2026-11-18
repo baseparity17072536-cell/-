@@ -71,8 +71,13 @@
 - บั๊กที่ E2E จับได้: หลังยืนยัน หน้า refresh แล้ว redirect ทันที ผู้ใช้ **ไม่เห็นรหัสกู้คืน** → action นี้ไม่ refresh หน้า
 - E2E owner login (`auth.setup.ts`) รองรับ MFA: ตั้งค่าอัตโนมัติครั้งแรกแล้วเก็บ secret ใน `playwright/.auth/` (git-ignored)
 
+### ที่เก็บรูป Vercel Blob (P1-3) — 2026-11-18
+- `storage.ts` เลือก driver ตาม env: มี `BLOB_READ_WRITE_TOKEN` → Vercel Blob (`@vercel/blob@2.8.2`, public, `rooms/<tenant>/<uuid>.<ext>`, cache 1 ปี, ไม่ทับไฟล์เดิม) · ไม่มี → ดิสก์ (dev) · บน Vercel แต่ยังไม่เปิด Blob → ข้อความบอกสาเหตุแทน EROFS
+- ลบไฟล์เฉพาะของโรงแรมตัวเอง (`deleteStoredFile(tenantId, url)` ตรวจ host, https, path, ไม่มี query) · `next.config` อนุญาตเฉพาะ `*.public.blob.vercel-storage.com/rooms/**`
+- Test เพิ่ม 4 (mock SDK) · mutation: ตัดการตรวจโรงแรมตอนลบ → test ล้ม
+
 ### ถัดไป
 - ติดตั้ง `0004` บน Supabase แล้ว deploy MFA
-- P1-3: Vercel Blob สำหรับรูปห้อง
+- เปิด Vercel Blob store (`DEPLOYMENT_GUIDE.md`)
 - Phase 2: PromptPay QR + สลิป (P1-4)
 - Phase 2 — Payment (ต้องการข้อมูลบัญชี/PromptPay/gateway จากเจ้าของ)
