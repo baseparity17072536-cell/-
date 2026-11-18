@@ -56,6 +56,11 @@
 - `DEFAULT_TENANT_SLUG` (ไม่บังคับ): โดเมนที่ไม่รู้จักใช้โรงแรมนี้แทน สำหรับ URL ของแต่ละ deployment ที่เปลี่ยนทุกครั้ง · โดเมนที่ลงทะเบียนไว้มีลำดับสูงกว่าเสมอ
 - Test: `tests/integration/tenancy-host.test.ts` (5 กรณี)
 
+### ปิด Phase 1 — 2026-11-18
+- Test รูปห้อง `tests/integration/room-images.test.ts` (8 กรณี) · mutation: ปิดการตรวจ magic bytes → test ล้ม
+- เอกสาร: `API_REFERENCE.md`, `USER_MANUAL.md`, `PHASE-1-REPORT.md`
+- Vitest รวม 59 tests ผ่าน · พบว่า MFA เจ้าของ (D7) ยังไม่ได้ทำ → ใส่ในรายการตัดสินใจ P1-2
+
 ### ถัดไป
-- ส่วนที่เหลือของ Phase 1: Phase 1 completion report, เอกสาร API/คู่มือฉบับแรก
+- ตรวจรับ Phase 1 + ตัดสินใจ P1-2 ถึง P1-4 (`PHASE-1-REPORT.md` ข้อ 8)
 - Phase 2 — Payment (ต้องการข้อมูลบัญชี/PromptPay/gateway จากเจ้าของ)
