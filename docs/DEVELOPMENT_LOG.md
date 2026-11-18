@@ -61,6 +61,18 @@
 - เอกสาร: `API_REFERENCE.md`, `USER_MANUAL.md`, `PHASE-1-REPORT.md`
 - Vitest รวม 59 tests ผ่าน · พบว่า MFA เจ้าของ (D7) ยังไม่ได้ทำ → ใส่ในรายการตัดสินใจ P1-2
 
+### ยืนยันตัวตน 2 ขั้นตอน (MFA) — 2026-11-18
+เจ้าของอนุมัติ P1-1 ถึง P1-4 ตามที่เสนอ
+- TOTP (RFC 6238) บน `node:crypto` · บังคับบทบาทเจ้าของ · รหัสกู้คืน 10 รหัส · secret เข้ารหัส AES-256-GCM · กันใช้รหัสซ้ำ · ล็อกบัญชีร่วมกับรหัสผ่านผิด → ADR-0011
+- Migration `0004_mfa` + `scripts/upgrade-0004-mfa.sql` สำหรับ Supabase (ทดสอบบน dev: rollback → รันไฟล์ → รันซ้ำแล้วหยุดอย่างปลอดภัย)
+- หน้าใหม่ `/admin/login/verify`, `/admin/mfa-setup` · บัญชีของฉัน: สถานะ/รหัสกู้คืนใหม่/ตั้งค่าเครื่องใหม่ · พนักงาน: ป้ายสถานะ + รีเซ็ต
+- Test: unit 9 (test vector RFC 4226/6238, การเข้ารหัส, รหัสกู้คืน) + integration 12 + E2E 1 (Chromium จริง ใช้บัญชีชั่วคราวใน dev DB)
+- Mutation: ปิดการกันใช้รหัสซ้ำ → 2 test ล้ม · ลบการตรวจ `mfa_ok` → ตอนแรก **ไม่มี test ล้ม** จึงเพิ่ม test ชั้นป้องกันซ้อน → ล้มแล้ว
+- บั๊กที่ E2E จับได้: หลังยืนยัน หน้า refresh แล้ว redirect ทันที ผู้ใช้ **ไม่เห็นรหัสกู้คืน** → action นี้ไม่ refresh หน้า
+- E2E owner login (`auth.setup.ts`) รองรับ MFA: ตั้งค่าอัตโนมัติครั้งแรกแล้วเก็บ secret ใน `playwright/.auth/` (git-ignored)
+
 ### ถัดไป
-- ตรวจรับ Phase 1 + ตัดสินใจ P1-2 ถึง P1-4 (`PHASE-1-REPORT.md` ข้อ 8)
+- ติดตั้ง `0004` บน Supabase แล้ว deploy MFA
+- P1-3: Vercel Blob สำหรับรูปห้อง
+- Phase 2: PromptPay QR + สลิป (P1-4)
 - Phase 2 — Payment (ต้องการข้อมูลบัญชี/PromptPay/gateway จากเจ้าของ)

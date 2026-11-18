@@ -5,7 +5,7 @@
 
 สถานะ: ✅ เสร็จและผ่าน test · 🟡 กำลังทำ · ⬜ ยังไม่เริ่ม · 🔑 รอข้อมูลจากเจ้าของ
 
-## Phase 1 — Core System ✅ (รอตรวจรับ — `PHASE-1-REPORT.md`)
+## Phase 1 — Core System ✅ (อนุมัติ 2026-11-18 — `PHASE-1-REPORT.md`)
 
 | โมดูล | Backend + DB | UI | Test |
 |---|---|---|---|
@@ -29,7 +29,8 @@
 | รองรับมือถือ (เว็บลูกค้า + หลังบ้าน) | — | ✅ | ✅ E2E mobile |
 | Outbox แจ้งเตือน (คิวเท่านั้น ส่งจริง Phase 6) | ✅ | — | — |
 | เอกสาร: API reference, คู่มือหลังบ้าน, Phase 1 report | ✅ | — | — |
-| MFA เจ้าของ (D7) | ⬜ รอตัดสินใจ (P1-2) | | |
+| MFA (TOTP) บังคับเจ้าของ + รหัสกู้คืน (D7, ADR-0011) | ✅ | ✅ | ✅ + E2E |
+| ที่เก็บรูปบน production (Vercel Blob, P1-3) | ⬜ | — | — |
 
 ## Phase 2 — Payment ⬜
 โอนธนาคาร, จัดการบัญชีธนาคาร, PromptPay QR, อัปโหลด/ตรวจสลิป, Payment gateway + webhook 🔑, มัดจำ/จ่ายบางส่วน/จ่ายเต็ม, คืนเงิน, Payment ledger, ใบยืนยันการจอง PDF

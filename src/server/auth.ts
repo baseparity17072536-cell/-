@@ -11,6 +11,7 @@ export const SESSION_HOURS = 12;
 const LOCK_AFTER = 5;
 const LOCK_MINUTES = 15;
 const RESET_MINUTES = 60;
+const MFA_CHALLENGE_MINUTES = 5;
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const newToken = () => randomBytes(32).toString("base64url");
@@ -49,9 +50,33 @@ export function clearRateLimit(tenantId: string, key: string) {
 }
 
 // --------------------------------------------------------------------- login --
-export type StaffSession = { userId: string; tenantId: string; role: Role; name: string; email: string; isPlatformAdmin: boolean };
+export type StaffSession = {
+  userId: string; tenantId: string; role: Role; name: string; email: string; isPlatformAdmin: boolean;
+  /** user has two-factor sign-in turned on */
+  mfaEnabled: boolean;
+  /** owner without MFA: the session may only be used to set it up */
+  mfaRequired: boolean;
+};
 
-type LoginResult = { ok: true; token: string; expiresAt: Date } | { ok: false; error: string };
+/** "mfa": password accepted, the second factor is still needed (see mfa.ts verifyMfaLogin). */
+export type LoginResult =
+  | { ok: true; token: string; expiresAt: Date }
+  | { ok: "mfa"; challenge: string; expiresAt: Date }
+  | { ok: false; error: string };
+
+/** Create a session row; the raw token goes only to the cookie. */
+export async function createSession(tx: Tx, tenantId: string, userId: string, meta: { ip: string; userAgent: string }, mfaOk: boolean) {
+  const token = newToken();
+  const expiresAt = new Date(Date.now() + SESSION_HOURS * 3_600_000);
+  await tx.query(
+    "INSERT INTO user_sessions (id, user_id, tenant_id, expires_at, ip, user_agent, mfa_ok) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+    [sha256(token), userId, tenantId, expiresAt, meta.ip, meta.userAgent.slice(0, 300), mfaOk],
+  );
+  await tx.query("DELETE FROM user_sessions WHERE user_id = $1 AND expires_at < now()", [userId]);
+  return { token, expiresAt };
+}
+
+export const tokenHash = (token: string) => sha256(token);
 
 const GENERIC_LOGIN_ERROR = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
 
@@ -61,9 +86,9 @@ export async function login(tenantId: string, email: string, password: string, m
   const user = await withTenant(tenantId, async (tx) => {
     if (!(await rateLimit(tx, `login:ip:${meta.ip}`, 20, 15 * 60))) return "limited" as const;
     if (!(await rateLimit(tx, `login:email:${normalized}`, 10, 15 * 60))) return "limited" as const;
-    return one<{ id: string; password_hash: string; is_active: boolean; locked_until: Date | null; role: Role | null; m_active: boolean | null }>(
+    return one<{ id: string; password_hash: string; is_active: boolean; locked_until: Date | null; role: Role | null; m_active: boolean | null; mfa: boolean }>(
       tx,
-      `SELECT u.id, u.password_hash, u.is_active, u.locked_until, m.role, m.is_active AS m_active
+      `SELECT u.id, u.password_hash, u.is_active, u.locked_until, m.role, m.is_active AS m_active, u.totp_enabled_at IS NOT NULL AS mfa
        FROM users u LEFT JOIN memberships m ON m.user_id = u.id AND m.tenant_id = $2
        WHERE u.email = $1`,
       [normalized, tenantId],
@@ -78,7 +103,7 @@ export async function login(tenantId: string, email: string, password: string, m
     return { ok: false, error: "บัญชีถูกล็อกชั่วคราวเนื่องจากใส่รหัสผ่านผิดหลายครั้ง กรุณารอ 15 นาทีหรือรีเซ็ตรหัสผ่าน" };
 
   const valid = await verify(user.password_hash, password).catch(() => false);
-  return withTenant(tenantId, async (tx) => {
+  return withTenant(tenantId, async (tx): Promise<LoginResult> => {
     if (!valid) {
       await tx.query(
         `UPDATE users SET failed_logins = failed_logins + 1,
@@ -90,14 +115,16 @@ export async function login(tenantId: string, email: string, password: string, m
     }
     if (!user.is_active || !user.role || !user.m_active) return { ok: false, error: "บัญชีนี้ไม่มีสิทธิ์เข้าใช้งานหลังบ้านของที่พักนี้" };
 
-    const token = newToken();
-    const expiresAt = new Date(Date.now() + SESSION_HOURS * 3_600_000);
+    if (user.mfa) {
+      // failed_logins is reset only after the second factor succeeds
+      const challenge = newToken();
+      const expiresAt = new Date(Date.now() + MFA_CHALLENGE_MINUTES * 60_000);
+      await tx.query("DELETE FROM mfa_challenges WHERE user_id = $1 AND (expires_at < now() OR tenant_id = $2)", [user.id, tenantId]);
+      await tx.query("INSERT INTO mfa_challenges (id, user_id, tenant_id, expires_at, ip) VALUES ($1,$2,$3,$4,$5)", [sha256(challenge), user.id, tenantId, expiresAt, meta.ip]);
+      return { ok: "mfa", challenge, expiresAt };
+    }
     await tx.query("UPDATE users SET failed_logins = 0, locked_until = NULL, last_login_at = now() WHERE id = $1", [user.id]);
-    await tx.query(
-      "INSERT INTO user_sessions (id, user_id, tenant_id, expires_at, ip, user_agent) VALUES ($1,$2,$3,$4,$5,$6)",
-      [sha256(token), user.id, tenantId, expiresAt, meta.ip, meta.userAgent.slice(0, 300)],
-    );
-    await tx.query("DELETE FROM user_sessions WHERE user_id = $1 AND expires_at < now()", [user.id]);
+    const { token, expiresAt } = await createSession(tx, tenantId, user.id, meta, false);
     await audit(tx, tenantId, { type: "staff", userId: user.id, role: user.role, name: "", ip: meta.ip }, "auth.login", "user", user.id);
     return { ok: true, token, expiresAt };
   });
@@ -107,16 +134,22 @@ export async function login(tenantId: string, email: string, password: string, m
 export async function getSession(tenantId: string, token: string | undefined): Promise<StaffSession | null> {
   if (!token || token.length > 100) return null;
   return withTenant(tenantId, async (tx) => {
-    const s = await one<{ user_id: string; role: Role; name: string; email: string; is_platform_admin: boolean }>(
+    const s = await one<{ user_id: string; role: Role; name: string; email: string; is_platform_admin: boolean; mfa: boolean }>(
       tx,
-      `SELECT s.user_id, m.role, u.name, u.email, u.is_platform_admin
+      `SELECT s.user_id, m.role, u.name, u.email, u.is_platform_admin, u.totp_enabled_at IS NOT NULL AS mfa
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id AND u.is_active
        JOIN memberships m ON m.user_id = s.user_id AND m.tenant_id = s.tenant_id AND m.is_active
-       WHERE s.id = $1 AND s.tenant_id = $2 AND s.expires_at > now() AND s.created_at >= u.password_changed_at`,
+       WHERE s.id = $1 AND s.tenant_id = $2 AND s.expires_at > now() AND s.created_at >= u.password_changed_at
+         AND (u.totp_enabled_at IS NULL OR s.mfa_ok)`,
       [sha256(token), tenantId],
     );
-    return s ? { userId: s.user_id, tenantId, role: s.role, name: s.name, email: s.email, isPlatformAdmin: s.is_platform_admin } : null;
+    return s
+      ? {
+          userId: s.user_id, tenantId, role: s.role, name: s.name, email: s.email, isPlatformAdmin: s.is_platform_admin,
+          mfaEnabled: s.mfa, mfaRequired: mfaRequiredFor(s.role) && !s.mfa,
+        }
+      : null;
   });
 }
 
@@ -187,6 +220,9 @@ export async function changePassword(tenantId: string, session: StaffSession, cu
 }
 
 // -------------------------------------------------------------- staff admin --
+/** Roles that must use two-factor sign-in (PHASE-1-REPORT P1-2). */
+export const mfaRequiredFor = (role: Role) => role === "owner";
+
 export function staffActor(s: StaffSession, ip?: string): Actor {
   return { type: "staff", userId: s.userId, role: s.role, name: s.name, ip };
 }
@@ -194,9 +230,10 @@ export function staffActor(s: StaffSession, ip?: string): Actor {
 export async function listStaff(tenantId: string, actor: StaffSession) {
   if (!can(actor.role, "users.view")) throw new ForbiddenError();
   return withTenant(tenantId, (tx) =>
-    many<{ id: string; name: string; email: string; role: Role; is_active: boolean; last_login_at: Date | null; locked_until: Date | null }>(
+    many<{ id: string; name: string; email: string; role: Role; is_active: boolean; last_login_at: Date | null; locked_until: Date | null; mfa_enabled: boolean }>(
       tx,
-      `SELECT u.id, u.name, u.email, m.role, (m.is_active AND u.is_active) AS is_active, u.last_login_at, u.locked_until
+      `SELECT u.id, u.name, u.email, m.role, (m.is_active AND u.is_active) AS is_active, u.last_login_at, u.locked_until,
+              u.totp_enabled_at IS NOT NULL AS mfa_enabled
        FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.tenant_id = $1 ORDER BY m.role, u.name`,
       [tenantId],
     ),

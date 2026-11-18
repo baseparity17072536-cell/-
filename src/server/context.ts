@@ -45,6 +45,8 @@ export async function requireStaff(permission?: Permission) {
   const tenant = await getTenant();
   const session = await getStaff();
   if (!session) redirect("/admin/login");
+  // owners must finish two-factor setup before using anything else (pages and actions alike)
+  if (session.mfaRequired) redirect("/admin/mfa-setup");
   const access = permission ? decide(session.role, permission) : ("allow" as const);
   return { tenant, propertyId: tenant.propertyId!, session, actor: staffActor(session, await clientIp()), access };
 }

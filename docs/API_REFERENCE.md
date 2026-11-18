@@ -1,6 +1,6 @@
 # API Reference — FAHTALAY Booking Engine (Phase 1)
 
-ฉบับแรก · 2026-11-18 · ตรงกับโค้ด commit หลัง `7480fb0`
+ฉบับแรก · 2026-11-18 · ปรับปรุง: เพิ่มการยืนยันตัวตน 2 ขั้นตอน (MFA)
 
 > **ยังไม่มี REST API สาธารณะ** (`/api/v1/*`) — ตามข้อ D9 ใน `PHASE-0-REPORT.md` จะเปิดเมื่อเริ่ม Phase ที่ต้องใช้ (Payment webhook ใน Phase 2, Partner/Channel ใน Phase 6)
 > ใน Phase 1 ทุกการทำงานผ่าน **Server Actions** ของ Next.js ซึ่งเรียกได้เฉพาะจากฟอร์มในเว็บนี้เอง (มี Origin check ของ Next.js) และทุกกติกาถูกตรวจซ้ำใน service layer (`src/server/*`)
@@ -21,7 +21,7 @@
 | เรื่อง | กติกา |
 |---|---|
 | ระบุโรงแรม | จาก Host header เท่านั้น (`tenant_domains`, สำรองด้วย `DEFAULT_TENANT_SLUG`) — ไม่รับ tenant id จาก client |
-| ตัวตนพนักงาน | cookie `ft_session` (httpOnly, SameSite=Lax, Secure บน production) อายุ 12 ชั่วโมง |
+| ตัวตนพนักงาน | cookie `ft_session` (httpOnly, SameSite=Lax, Secure บน production) อายุ 12 ชั่วโมง · ผู้ที่เปิด MFA: session ต้องผ่านขั้นที่ 2 (`mfa_ok`) · เจ้าของที่ยังไม่ตั้ง MFA ถูก redirect ไป `/admin/mfa-setup` ทุกหน้าและทุก action |
 | ผลลัพธ์ | `{ ok?: string; error?: string; link?: string }` ข้อความเป็นภาษาไทยที่แสดงผู้ใช้ได้ หรือ redirect ไปหน้าถัดไป |
 | ข้อผิดพลาดที่คาดได้ | `DomainError` / `ForbiddenError` → ส่ง `error` กลับ · ข้อผิดพลาดอื่นถูก log ฝั่งเซิร์ฟเวอร์ และผู้ใช้เห็นข้อความทั่วไป |
 | เงิน | เก็บเป็น **สตางค์** (integer) · ฟอร์มรับเป็นบาท |
@@ -40,6 +40,8 @@
 | `/booking/policy` | ทุกคน | เงื่อนไขการจอง |
 | `/media/[tenant]/[file]` | ทุกคน | รูปที่อัปโหลด ส่งเฉพาะบนโดเมนของโรงแรมเจ้าของรูป · ชื่อไฟล์ต้องเป็น `uuid.(jpg\|png\|webp)` · `X-Content-Type-Options: nosniff` |
 | `/admin/login`, `/admin/forgot-password`, `/admin/reset-password?token=` | พนักงาน | |
+| `/admin/login/verify` | พนักงานที่เปิด MFA | ขั้นที่ 2 ของการเข้าสู่ระบบ ใช้ cookie `ft_mfa` (httpOnly, path `/admin`, อายุ 5 นาที) |
+| `/admin/mfa-setup` | ผู้ที่ล็อกอินแล้ว | ตั้งค่า MFA (QR + รหัสลับสำหรับพิมพ์เอง) · เจ้าของที่ยังไม่ตั้งค่าเข้าได้แค่หน้านี้ |
 | `/admin/*` | พนักงานที่ล็อกอิน | เมนูที่เห็นขึ้นกับบทบาท (ดูข้อ 6) |
 
 ## 3. Server Actions — ลูกค้า (`src/app/actions.ts`)
@@ -57,7 +59,12 @@
 ### 4.1 บัญชีผู้ใช้
 | Action | ฟิลด์ | สิทธิ์ | หมายเหตุ |
 |---|---|---|---|
-| `loginAction` | `email`, `password` | — | ผิด 5 ครั้งล็อก 15 นาที · ข้อความผิดพลาดเหมือนกันทุกกรณี (ไม่บอกว่าอีเมลมีหรือไม่) |
+| `loginAction` | `email`, `password` | — | ผิด 5 ครั้งล็อก 15 นาที · ข้อความผิดพลาดเหมือนกันทุกกรณี (ไม่บอกว่าอีเมลมีหรือไม่) · ถ้าเปิด MFA: ตั้ง cookie `ft_mfa` แล้ว redirect `/admin/login/verify` |
+| `verifyMfaAction` | `code` (6 หลัก หรือรหัสกู้คืน `XXXX-XXXX`) | — | ผิดได้ 5 ครั้งต่อการเข้าสู่ระบบ และนับรวมกับการล็อกบัญชี · รหัสใช้ซ้ำไม่ได้ · ใช้รหัสกู้คืน → redirect `/admin/account?recovery_left=n` |
+| `confirmMfaAction` | `code` | ล็อกอินแล้ว | เปิด MFA · คืน `codes` (รหัสกู้คืน 10 รหัส แสดงครั้งเดียว) · ออกจากระบบทุกเครื่องอื่น |
+| `regenerateRecoveryAction` | `code` (จากแอป) | ล็อกอินแล้ว + MFA | รหัสกู้คืนชุดใหม่ ชุดเดิมใช้ไม่ได้ |
+| `disableMfaAction` | `password` | ล็อกอินแล้ว + MFA | บทบาทอื่น: ปิด MFA · เจ้าของ: ล้างเครื่องเดิมแล้วไปตั้งค่าใหม่ทันที |
+| `resetMfaAction` | `user_id` | `users.manage` | เจ้าของรีเซ็ต MFA ของพนักงานคนอื่น (โทรศัพท์หาย) · ผู้ใช้ถูกออกจากระบบ · รีเซ็ตของตนเองไม่ได้ |
 | `logoutAction` | — | — | ลบ session ในฐานข้อมูลและ cookie |
 | `forgotPasswordAction` | `email` | — | ตอบเหมือนกันเสมอ · ลิงก์อายุ 60 นาที ใช้ครั้งเดียว (ส่งอีเมลจริงใน Phase 6) |
 | `resetPasswordAction` | `token`, `password`, `confirm` | — | รหัสผ่าน ≥ 10 ตัว |
@@ -142,7 +149,7 @@
 | `INVALID_TRANSITION` | เปลี่ยนสถานะแบบนี้ไม่ได้ |
 | `CONFLICT` | มีคนแก้ข้อมูลนี้ก่อนหน้า (version ไม่ตรง) |
 | `FORBIDDEN` | ไม่มีสิทธิ์ |
-| `RATE_LIMITED` | ทำรายการถี่เกินไป |
+| `RATE_LIMITED` | ทำรายการถี่เกินไป (รวมถึงการลองรหัส MFA เกิน 10 ครั้ง/15 นาที) |
 | `ROOM_TAKEN` | ห้องจริงถูกจัดให้การจองอื่นในช่วงนั้นแล้ว |
 
 ## 8. Environment variables
@@ -150,7 +157,7 @@
 | Key | จำเป็น | ใช้ทำอะไร |
 |---|---|---|
 | `DATABASE_URL` | ✅ | ต่อฐานข้อมูลด้วย role `fahtalay_app` |
-| `APP_SECRET` | ✅ | ลงชื่อ cookie สิทธิ์ดูการจองของลูกค้า (≥ 32 ตัว) |
+| `APP_SECRET` | ✅ | ลงชื่อ cookie สิทธิ์ดูการจองของลูกค้า + เข้ารหัส secret ของ MFA (≥ 32 ตัว) ⚠ เปลี่ยนแล้วผู้ใช้ทุกคนต้องตั้ง MFA ใหม่ (เข้าด้วยรหัสกู้คืน) |
 | `DATABASE_POOL_MAX` | – | ขนาด connection pool (Vercel: 3) |
 | `DEFAULT_TENANT_SLUG` | – | โรงแรมสำหรับโดเมนที่ไม่ได้ลงทะเบียน (ติดตั้งโรงแรมเดียว) |
 | `TRUST_PROXY_HOST` | – | `1` = เชื่อ `x-forwarded-host` (ใช้เมื่ออยู่หลัง proxy ที่ควบคุมเองเท่านั้น) |

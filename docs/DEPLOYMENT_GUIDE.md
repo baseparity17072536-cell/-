@@ -63,13 +63,23 @@ Vercel → Project → **Settings → Environment Variables** (Production):
 | Key | Value |
 |---|---|
 | `DATABASE_URL` | Pooled connection string แต่เปลี่ยน **user/password** เป็น `fahtalay_app` / `DATABASE_APP_PASSWORD` จากข้อ 2 · ต่อท้าย `?sslmode=require` |
-| `APP_SECRET` | ข้อความสุ่มยาวอย่างน้อย 32 ตัว (สร้างได้ด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) |
+| `APP_SECRET` | ⚠ ห้ามเปลี่ยนหลังเปิดใช้ (เข้ารหัส secret ของ MFA ไว้ เปลี่ยนแล้วทุกคนต้องตั้ง MFA ใหม่) · ข้อความสุ่มยาวอย่างน้อย 32 ตัว (สร้างได้ด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) |
 | `DATABASE_POOL_MAX` | `3` (serverless เปิดหลาย instance พร้อมกัน) |
 | `DEFAULT_TENANT_SLUG` | `fahtalay` (ไม่บังคับ) — โรงแรมที่จะแสดงเมื่อเปิดจากโดเมนที่ไม่อยู่ใน `tenant_domains` เช่น URL ของแต่ละ deployment ที่มีเลขสุ่ม · ใช้เฉพาะตอนติดตั้งโรงแรมเดียว ถ้าเป็นแพลตฟอร์มหลายโรงแรมให้เว้นว่าง |
 
 > ⚠ ห้ามใส่ `DATABASE_ADMIN_URL` (สิทธิ์เจ้าของตาราง) ใน Vercel แอปต้องใช้ role `fahtalay_app` เท่านั้น เพื่อให้ RLS แยกข้อมูลโรงแรมทำงาน
 
 แล้วกด **Deployments → Redeploy**
+
+## อัปเกรดฐานข้อมูล production (migration ใหม่)
+
+ทุกครั้งที่มี migration ใหม่ ต้องรัน SQL ใน Supabase **ก่อน** deploy โค้ด (โค้ดเก่าทำงานกับ schema ใหม่ได้ แต่โค้ดใหม่ทำงานกับ schema เก่าไม่ได้)
+
+| Migration | ไฟล์สำหรับ Supabase SQL Editor | หมายเหตุ |
+|---|---|---|
+| `0004_mfa` | `scripts/upgrade-0004-mfa.sql` | ยืนยันตัวตน 2 ขั้นตอน · หลัง deploy เจ้าของทุกคนต้องตั้งค่าในการเข้าใช้ครั้งถัดไป |
+
+ไฟล์ทำงานใน transaction เดียว ถ้าเคยรันแล้วจะหยุดด้วย `already exists` โดยไม่เปลี่ยนอะไร · บรรทัดสุดท้ายแสดงรายการ migration ที่ติดตั้งแล้ว
 
 ## 4. ตรวจสอบ
 

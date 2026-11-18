@@ -17,12 +17,14 @@ import {
   addRoomTypeImage, bulkCreateRooms, deleteRoomTypeImage, moveRoomTypeImage, savePriceRule, saveRatePlan, saveRoom,
   saveRoomType, setDailyRates, setHousekeepingStatus, updateProperty, type ApplyResult,
 } from "@/server/catalog";
-import { baseUrl, clientIp, getTenant, requireStaff } from "@/server/context";
+import { baseUrl, clientIp, getStaff, getTenant, requireStaff } from "@/server/context";
 import { DomainError } from "@/server/errors";
+import { confirmMfaSetup, disableMfa, regenerateRecoveryCodes, resetMfaFor, verifyMfaLogin } from "@/server/mfa";
 import { ForbiddenError, ROLES } from "@/server/rbac";
 import { deleteStoredFile, saveImage } from "@/server/storage";
 
-export type ActionState = { error?: string; ok?: string; link?: string } | null;
+/** `codes`: one-time recovery codes, shown once after MFA setup. */
+export type ActionState = { error?: string; ok?: string; link?: string; codes?: string[] } | null;
 
 // --------------------------------------------------------------- plumbing --
 const PENDING = "ส่งคำขอให้เจ้าของอนุมัติแล้ว การเปลี่ยนแปลงจะมีผลเมื่อได้รับอนุมัติ";
@@ -82,10 +84,82 @@ export async function loginAction(_: ActionState, fd: FormData): Promise<ActionS
   if (!email || !password) return { error: "กรุณากรอกอีเมลและรหัสผ่าน" };
   const r = await login(tenant.id, email, password, { ip: await clientIp(), userAgent: "" });
   if (!r.ok) return { error: r.error };
-  (await cookies()).set(SESSION_COOKIE, r.token, {
+  const jar = await cookies();
+  if (r.ok === "mfa") {
+    jar.set(MFA_COOKIE, r.challenge, {
+      httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/admin", expires: r.expiresAt,
+    });
+    redirect("/admin/login/verify");
+  }
+  setSessionCookie(jar, r.token);
+  redirect("/admin");
+}
+
+// ---------------------------------------------------------- two-factor (MFA) --
+const MFA_COOKIE = "ft_mfa";
+
+function setSessionCookie(jar: Awaited<ReturnType<typeof cookies>>, token: string) {
+  jar.set(SESSION_COOKIE, token, {
     httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_HOURS * 3600,
   });
-  redirect("/admin");
+}
+
+export async function verifyMfaAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const tenant = await getTenant();
+  const jar = await cookies();
+  const r = await verifyMfaLogin(tenant.id, jar.get(MFA_COOKIE)?.value, s(fd, "code", 20), { ip: await clientIp(), userAgent: "" });
+  if (!r.ok) {
+    if (r.restart) jar.delete({ name: MFA_COOKIE, path: "/admin" });
+    return { error: r.error };
+  }
+  jar.delete({ name: MFA_COOKIE, path: "/admin" });
+  setSessionCookie(jar, r.token);
+  redirect(r.usedRecovery ? `/admin/account?recovery_left=${r.recoveryLeft}` : "/admin");
+}
+
+/** MFA setup is reachable before setup is finished, so it cannot use requireStaff (which redirects here). */
+async function sessionForMfa() {
+  const tenant = await getTenant();
+  const session = await getStaff();
+  if (!session) redirect("/admin/login");
+  return { tenant, session };
+}
+
+// Not wrapped in run(): run() refreshes the page, and the setup page redirects away once MFA is
+// on, so the one-time recovery codes would never be seen. The user continues with the page link.
+export async function confirmMfaAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const { tenant, session } = await sessionForMfa();
+  try {
+    const codes = await confirmMfaSetup(tenant.id, session, s(fd, "code", 20), (await cookies()).get(SESSION_COOKIE)?.value);
+    return { ok: "เปิดการยืนยันตัวตน 2 ขั้นตอนแล้ว", codes };
+  } catch (e) {
+    if (e instanceof DomainError) return { error: e.message };
+    throw e;
+  }
+}
+
+export async function regenerateRecoveryAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, session } = await requireStaff();
+    const codes = await regenerateRecoveryCodes(tenant.id, session, s(fd, "code", 20));
+    return { ok: "สร้างรหัสกู้คืนชุดใหม่แล้ว รหัสชุดเดิมใช้ไม่ได้อีก", codes };
+  });
+}
+
+export async function disableMfaAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, session } = await requireStaff();
+    if (await disableMfa(tenant.id, session, String(fd.get("password") ?? ""))) redirect("/admin/mfa-setup");
+    return "ปิดการยืนยันตัวตน 2 ขั้นตอนแล้ว";
+  });
+}
+
+export async function resetMfaAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const { tenant, session } = await requireStaff("users.manage");
+    await resetMfaFor(tenant.id, session, uuid(fd, "user_id"));
+    return "รีเซ็ตการยืนยันตัวตน 2 ขั้นตอนแล้ว พนักงานต้องตั้งค่าใหม่";
+  });
 }
 
 export async function logoutAction() {

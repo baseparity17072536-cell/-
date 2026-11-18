@@ -54,3 +54,5 @@ next-env.d.ts
 
 # generated installer SQL (contains passwords)
 *setup*.sql
+# E2E: dev owner TOTP secret (tests/e2e/auth.setup.ts)
+/playwright/.auth

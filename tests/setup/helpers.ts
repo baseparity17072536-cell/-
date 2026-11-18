@@ -60,7 +60,7 @@ export async function ownerSession(tenantId: string) {
   const r = (await admin().query(
     `SELECT u.id, u.name, u.email FROM memberships m JOIN users u ON u.id = m.user_id
      WHERE m.tenant_id = $1 AND m.role = 'owner' ORDER BY m.created_at LIMIT 1`, [tenantId])).rows[0];
-  return { userId: r.id as string, tenantId, role: "owner" as const, name: r.name as string, email: r.email as string, isPlatformAdmin: false };
+  return { userId: r.id as string, tenantId, role: "owner" as const, name: r.name as string, email: r.email as string, isPlatformAdmin: false, mfaEnabled: false, mfaRequired: false };
 }
 
 export const guest ={ name: "ทดสอบ ระบบ", phone: "0812345678", email: null, note: null };

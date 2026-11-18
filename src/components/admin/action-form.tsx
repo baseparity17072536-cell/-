@@ -78,9 +78,38 @@ export function Message({ state }: { state: ActionState }) {
       <div role="status" className="space-y-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200">
         <p>{state.ok}</p>
         {state.link && <CopyLink link={state.link} />}
+        {state.codes && <RecoveryCodes codes={state.codes} />}
       </div>
     );
   return null;
+}
+
+/** One-time recovery codes: shown once, so offer copy and download. */
+function RecoveryCodes({ codes }: { codes: string[] }) {
+  const [copied, setCopied] = useState(false);
+  const text = codes.join("\n");
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([`รหัสกู้คืน FahTalay (ใช้ได้รหัสละ 1 ครั้ง)\n\n${text}\n`], { type: "text/plain;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: "fahtalay-recovery-codes.txt" });
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="space-y-2 text-ink">
+      <p className="font-semibold text-red-700">เก็บรหัสกู้คืนเหล่านี้ไว้ในที่ปลอดภัย ระบบจะแสดงครั้งเดียว</p>
+      <p className="text-xs text-ink/70">ใช้แทนรหัสจากแอปได้รหัสละ 1 ครั้ง เมื่อโทรศัพท์หายหรือเปลี่ยนเครื่อง</p>
+      <ol className="grid grid-cols-2 gap-1 rounded-lg bg-white p-3 font-mono text-sm ring-1 ring-emerald-200">
+        {codes.map((c) => <li key={c}>{c}</li>)}
+      </ol>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-white px-2 py-1 text-xs"
+          onClick={() => navigator.clipboard.writeText(text).then(() => setCopied(true), () => setCopied(false))}>
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />} {copied ? "คัดลอกแล้ว" : "คัดลอกทั้งหมด"}
+        </button>
+        <button type="button" className="rounded border border-emerald-300 bg-white px-2 py-1 text-xs" onClick={download}>ดาวน์โหลดเป็นไฟล์</button>
+      </div>
+    </div>
+  );
 }
 
 function CopyLink({ link }: { link: string }) {

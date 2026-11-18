@@ -4,7 +4,7 @@ import { formatThaiDateTime } from "@/lib/dates";
 import { listStaff } from "@/server/auth";
 import { requireStaff } from "@/server/context";
 import { can, PERMISSION_MATRIX, ROLE_LABEL, ROLES } from "@/server/rbac";
-import { inviteStaffAction, resetLinkAction, updateStaffAction } from "../../actions";
+import { inviteStaffAction, resetLinkAction, resetMfaAction, updateStaffAction } from "../../actions";
 
 const PERM_LABEL: Record<string, string> = {
   "booking.view": "ดูการจอง", "booking.create": "สร้างการจอง / จองแทนลูกค้า", "booking.status": "ยืนยัน เช็คอิน เช็คเอาท์",
@@ -28,7 +28,12 @@ export default async function StaffPage() {
         {staff.map((u) => (
           <tr key={u.id} className={u.is_active ? "" : "text-ink/40"}>
             <td className="px-4 py-3 font-medium">{u.name}{u.id === session.userId && " (คุณ)"}{u.locked_until && u.locked_until > new Date() && <span className="ml-1 text-xs text-red-600">ถูกล็อกชั่วคราว</span>}</td>
-            <td className="px-4 py-3">{u.email}</td>
+            <td className="px-4 py-3">
+              {u.email}
+              <span className={`ml-2 rounded px-1.5 py-0.5 text-xs ${u.mfa_enabled ? "bg-emerald-50 text-emerald-700" : "bg-cream text-ink/50"}`}>
+                {u.mfa_enabled ? "2 ขั้นตอน ✓" : "ไม่มี 2 ขั้นตอน"}
+              </span>
+            </td>
             <td className="px-4 py-3">
               {manage && u.id !== session.userId ? (
                 <ActionForm action={updateStaffAction} className="flex items-center gap-2" submitLabel="เปลี่ยน" submitClass={btnGhost} inlineSubmit>
@@ -50,6 +55,12 @@ export default async function StaffPage() {
                   <ActionForm action={resetLinkAction} submitLabel="สร้างลิงก์ตั้งรหัสผ่าน" submitClass={btnGhost} inlineSubmit className="">
                     <input type="hidden" name="user_id" value={u.id} />
                   </ActionForm>
+                  {u.mfa_enabled && (
+                    <ActionForm action={resetMfaAction} submitLabel="รีเซ็ต 2 ขั้นตอน" submitClass={btnGhost} inlineSubmit className=""
+                      confirm={`รีเซ็ตการยืนยันตัวตน 2 ขั้นตอนของ ${u.name}? (เช่น โทรศัพท์หาย) ผู้ใช้จะถูกออกจากระบบและต้องตั้งค่าใหม่`}>
+                      <input type="hidden" name="user_id" value={u.id} />
+                    </ActionForm>
+                  )}
                 </div>
               )}
             </td>

@@ -14,7 +14,7 @@ describe("staff authentication", () => {
   it("owner logs in, gets a session, logs out", async () => {
     const r = await login(ctx.tenantId, "OWNER@fahtalay.test", inject("ownerPassword"), meta);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    if (r.ok !== true) return;
     const s = await getSession(ctx.tenantId, r.token);
     expect(s).toMatchObject({ role: "owner", email: "owner@fahtalay.test" });
     // raw token is never stored
@@ -26,7 +26,7 @@ describe("staff authentication", () => {
 
   it("a session is only valid for the tenant it was issued for", async () => {
     const r = await login(ctx.tenantId, "owner@fahtalay.test", inject("ownerPassword"), { ...meta, ip: "10.0.0.2" });
-    if (!r.ok) throw new Error(r.error);
+    if (r.ok !== true) throw new Error(r.ok === false ? r.error : "unexpected mfa step");
     const other = (await admin().query("SELECT id FROM tenants WHERE slug <> 'fahtalay' LIMIT 1")).rows[0];
     if (other) expect(await getSession(other.id, r.token)).toBeNull();
   });
@@ -50,7 +50,7 @@ describe("staff authentication", () => {
     await resetPassword(ctx.tenantId, token, "Brand-new-pass-1");
     await expect(resetPassword(ctx.tenantId, token, "Another-pass-2")).rejects.toThrow(/หมดอายุ/);
     const r = await login(ctx.tenantId, "reset@test.local", "Brand-new-pass-1", { ...meta, ip: "10.0.0.4" });
-    if (!r.ok) throw new Error(r.error);
+    if (r.ok !== true) throw new Error(r.ok === false ? r.error : "unexpected mfa step");
     await updateStaff(ctx.tenantId, owner, inv.userId, { active: false });
     expect(await getSession(ctx.tenantId, r.token)).toBeNull();
     expect((await login(ctx.tenantId, "reset@test.local", "Brand-new-pass-1", { ...meta, ip: "10.0.0.4" })).ok).toBe(false);
